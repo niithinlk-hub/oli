@@ -17,7 +17,7 @@ Local-first AI meeting memory for Windows laptops. Listens to meetings, transcri
 | 7 | **6 built-in templates** (summary, actions, decision log, 1:1, standup, customer call) |
 | 8 | Google Calendar OAuth (PKCE) + 5-min poller + tray + 2-min notifications |
 | 9 | Outlook OAuth (PKCE / Graph) + .ics file import |
-| 10 | Native WASAPI loopback addon — scaffold; `getDisplayMedia` covers MVP |
+| 10 | Native WASAPI loopback addon: Windows system audio without the picker, with `getDisplayMedia` fallback |
 | 11 | Onboarding wizard + procedurally-rendered tray + window icons |
 | 12 | NSIS Windows installer + `electron-updater` (GitHub releases) |
 
@@ -66,7 +66,7 @@ First launch shows the **Onboarding wizard**: whisper paths → OpenAI key → c
 ## Daily flow
 
 1. **Ctrl+N** — new meeting.
-2. **Ctrl+R** or click **Record** — system audio picker → pick the call window.
+2. **Ctrl+R** or click **Record**: native WASAPI captures speakers without a system picker when the addon is built; otherwise the app falls back to the system audio picker.
 3. Live transcript appears within ~10s. Type rough notes in the right pane (auto-saves).
 4. Pick a template, click **✦ Enhance** — GPT-4o produces structured markdown.
 5. Switch to **Ask Oli** tab — multi-turn Q&A grounded in transcript + notes.
@@ -85,12 +85,58 @@ npm run publish         # Push to GitHub Releases (set GH_TOKEN, replace publish
 
 Auto-update polls GitHub Releases on packaged-app boot and every 6 hours, downloads in background, prompts user to restart.
 
+## Native WASAPI loopback
+
+The Windows addon lives in [native/win-loopback/](native/win-loopback/) and is built with `napi-rs`.
+
+```powershell
+npm run native:build
+```
+
+`npm install` also runs a best-effort postinstall build:
+
+```powershell
+napi build --release --platform
+```
+
+If Rust or the Windows SDK is missing, install still succeeds and Oli uses the renderer `getDisplayMedia` fallback. When the addon is present, recording starts `recording:start-native` in the main process, captures the default render endpoint with WASAPI loopback, streams mic chunks from the renderer over IPC, mixes both streams in main, and writes `%APPDATA%\Oli\recordings\<meetingId>\mixed.wav`.
+
+## Signing
+
+Windows public builds must be Authenticode-signed before distribution. Use an OV or EV code-signing certificate from a trusted CA such as DigiCert or Sectigo, store the `.pfx` outside this repo, and set these variables only on the build machine:
+
+```powershell
+$env:WIN_CSC_LINK = "C:\path\to\oli-codesign.pfx"
+$env:WIN_CSC_KEY_PASSWORD = "<password>"
+```
+
+The Electron Builder Windows config uses those variables for `certificateFile` and `certificatePassword`, signs DLLs, and sets `publisherName`. After packaging, verify the installer:
+
+```powershell
+npm run package
+signtool verify /pa /v dist\Oli-0.1.1-Setup.exe
+```
+
+SmartScreen reputation is tied to the certificate and download reputation. EV certificates usually clear warnings fastest; OV certificates can still require reputation accumulation.
+
+## Release
+
+Draft GitHub releases are created with Electron Builder. Set `GH_TOKEN` to a PAT with `repo` scope, ensure the signing variables above are present, then run:
+
+```powershell
+$env:GH_TOKEN = "<token>"
+npm run publish
+```
+
+Electron Builder uploads `Oli-x.y.z-Setup.exe` and `latest.yml` as a draft release. Publish the draft after adding release notes. To verify auto-update, install the previous signed build, publish a newer version, then launch the older app and wait for the update prompt.
+
 ## Project layout
 
 ```
 src/
   main/
-    audio/          wav.ts, recorder.ts (chunk windows + WAV writer)
+    audio/          wav.ts, recorder.ts (chunk windows + WAV writer),
+                    capture.ts (native WASAPI loopback + main-process mixer)
     whisper/        worker.ts (one-shot), streaming.ts (queue)
     llm/            openai-client.ts (enhance + ask), templates.ts (6 built-in),
                     html-to-markdown.ts
@@ -120,7 +166,7 @@ src/
     styles/         globals.css (CSS vars + Tiptap + .oli-md theme)
   shared/           types.ts
 build/              electron-builder resources (NSIS)
-native/             WASAPI loopback addon scaffold (deferred)
+native/             WASAPI loopback addon (napi-rs)
 ```
 
 ## Data location
@@ -129,16 +175,15 @@ native/             WASAPI loopback addon scaffold (deferred)
 - Recordings: `%APPDATA%\Oli\recordings\<meetingId>\…`
 - Encrypted secrets (DPAPI): `%APPDATA%\Oli\secrets\*.bin`
 
-## Cannot be done in this environment
+## Environment-dependent verification
 
-- **Authenticode signing** — needs a code-signing certificate.
-- **Native WASAPI addon compile** — needs Rust toolchain + Windows SDK.
-- **GitHub repo placeholders** — replace `REPLACE_WITH_GH_OWNER` / `REPLACE_WITH_GH_REPO` in `package.json > build.publish` before first `npm run publish`.
-- **Verifying running app** — Electron desktop, not previewable in browser. Run `npm run dev` locally.
+- **Authenticode signing** needs `WIN_CSC_LINK` and `WIN_CSC_KEY_PASSWORD` pointing at a real certificate on the build machine.
+- **Native WASAPI addon compile** needs Rust, the MSVC toolchain, and the Windows SDK.
+- **GitHub release publishing** needs `GH_TOKEN` with `repo` scope.
+- **End-to-end recording verification** needs an active Zoom or Teams call on Windows.
 
 ## Follow-ups
 
-1. Replace GitHub publish placeholders in `package.json`.
-2. Code-sign the NSIS installer to clear SmartScreen.
-3. Build the WASAPI loopback addon to remove the system picker prompt (see `native/win-loopback/`).
-4. Multi-meeting search-as-you-type with full-text SQLite (FTS5) instead of `LIKE`.
+1. Publish the first signed draft GitHub release.
+2. Verify auto-update from the previous signed version on a clean Windows VM.
+3. Multi-meeting search-as-you-type with full-text SQLite (FTS5) instead of `LIKE`.

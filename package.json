@@ -83,7 +83,13 @@
         { "target": "nsis", "arch": ["x64"] }
       ],
       "publisherName": "Oli",
-      "artifactName": "Oli-${version}-Setup.${ext}"
+      "artifactName": "Oli-${version}-Setup.${ext}",
+      "signtoolOptions": {
+        "publisherName": "Oli",
+        "signDlls": true
+      },
+      "certificateFile": "${env.WIN_CSC_LINK}",
+      "certificatePassword": "${env.WIN_CSC_KEY_PASSWORD}"
     },
     "nsis": {
       "oneClick": false,
