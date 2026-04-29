@@ -57,7 +57,7 @@ export function NotesEditor({
   useEffect(() => {
     if (!editor) return;
     if (editor.getHTML() === initialContent) return;
-    editor.commands.setContent(initialContent || '', { emitUpdate: false });
+    editor.commands.setContent(initialContent || '', false);
   }, [initialContent, editor]);
 
   // Expose immediate flush (used by Ctrl+S)

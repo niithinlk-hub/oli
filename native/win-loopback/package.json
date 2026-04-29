@@ -1,0 +1,22 @@
+{
+  "name": "@oli/win-loopback",
+  "version": "0.1.1",
+  "private": true,
+  "main": "index.cjs",
+  "scripts": {
+    "build": "napi build --release --platform",
+    "artifacts": "napi artifacts"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.0.0"
+  },
+  "napi": {
+    "name": "oli-win-loopback",
+    "triples": {
+      "defaults": false,
+      "additional": [
+        "x86_64-pc-windows-msvc"
+      ]
+    }
+  }
+}

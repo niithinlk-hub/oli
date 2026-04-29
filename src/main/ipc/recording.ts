@@ -6,6 +6,12 @@ import {
   setWindowCallback,
   isRecording
 } from '../audio/recorder';
+import {
+  appendNativeMicChunk,
+  isNativeLoopbackAvailable,
+  startNativeLoopbackRecording,
+  stopNativeLoopbackRecording
+} from '../audio/capture';
 import { StreamingTranscriber } from '../whisper/streaming';
 import { transcribeFile } from '../whisper/worker';
 import { meetingsRepo, transcriptRepo } from '../db/repo';
@@ -20,6 +26,8 @@ function broadcast<T>(channel: string, payload: T): void {
 }
 
 export function registerRecordingIpc(): void {
+  ipcMain.handle('recording:native-available', () => isNativeLoopbackAvailable());
+
   ipcMain.handle('recording:start', async (_e, args: RecordingStartArgs) => {
     const meeting = meetingsRepo.get(args.meetingId);
     if (!meeting) throw new Error(`meeting ${args.meetingId} not found`);
@@ -79,8 +87,35 @@ export function registerRecordingIpc(): void {
     }
   );
 
+  ipcMain.handle('recording:start-native', async (_e, meetingId: string) => {
+    if (!isRecording()) throw new Error('recording must be started before native capture');
+    startNativeLoopbackRecording(meetingId, (err) => {
+      console.error('native loopback capture failed:', err);
+      broadcast('recording:error', { meetingId, message: err.message });
+    });
+    return { ok: true };
+  });
+
+  ipcMain.handle(
+    'recording:mic-chunk',
+    async (_e, meetingId: string, buffer: ArrayBuffer | Uint8Array) => {
+      if (!isRecording()) return;
+      const ab =
+        buffer instanceof Uint8Array
+          ? buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+          : buffer;
+      appendNativeMicChunk(meetingId, new Float32Array(ab));
+    }
+  );
+
+  ipcMain.handle('recording:stop-native', async (_e, meetingId?: string) => {
+    await stopNativeLoopbackRecording(meetingId);
+    return { ok: true };
+  });
+
   ipcMain.handle('recording:stop', async (_e, opts: { runFinalPass?: boolean } = {}) => {
     if (!isRecording()) return null;
+    await stopNativeLoopbackRecording();
     const result = await stopRecording();
     setWindowCallback(null);
     activeStream?.cancel();

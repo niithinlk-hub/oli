@@ -1,5 +1,15 @@
 # win-loopback
 
-Windows WASAPI loopback addon (planned). See [../README.md](../README.md) for the rationale and integration plan.
+Windows WASAPI loopback addon for Oli.
 
-Recommended toolchain: `napi-rs` (Rust). Capture from `IMMDeviceEnumerator::GetDefaultAudioEndpoint(eRender, eConsole)` opened in loopback mode (`AUDCLNT_STREAMFLAGS_LOOPBACK`).
+The capture thread opens the default render endpoint with:
+
+- `IMMDeviceEnumerator::GetDefaultAudioEndpoint(eRender, eConsole)`
+- `IAudioClient::Initialize(..., AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK, ...)`
+
+Captured packets are converted to mono Float32, linearly resampled to 16 kHz, and emitted to the Electron main process as buffers. Build it with:
+
+```powershell
+npm install
+npm run build
+```

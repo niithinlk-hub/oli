@@ -7,11 +7,13 @@
   "license": "UNLICENSED",
   "scripts": {
     "dev": "electron-vite dev",
+    "postinstall": "node native/win-loopback/scripts/postinstall.cjs",
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "package": "electron-vite build && electron-builder --win",
     "package:nsis": "electron-vite build && electron-builder --win nsis",
     "publish": "electron-vite build && electron-builder --win --publish always",
+    "native:build": "npm --prefix native/win-loopback run build",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
@@ -67,8 +69,14 @@
     },
     "files": [
       "out/**/*",
+      "native/win-loopback/index.cjs",
+      "native/win-loopback/package.json",
+      "native/win-loopback/*.node",
       "resources/**/*",
       "package.json"
+    ],
+    "asarUnpack": [
+      "native/win-loopback/*.node"
     ],
     "win": {
       "target": [

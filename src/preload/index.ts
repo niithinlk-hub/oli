@@ -52,10 +52,19 @@ const api = {
   recording: {
     start: (args: RecordingStartArgs): Promise<{ audioPath: string }> =>
       ipcRenderer.invoke('recording:start', args),
+    nativeAvailable: (): Promise<boolean> => ipcRenderer.invoke('recording:native-available'),
+    startNative: (meetingId: string): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke('recording:start-native', meetingId),
     chunk: (meetingId: string, samples: Float32Array): Promise<void> => {
       const buf = samples.buffer.slice(samples.byteOffset, samples.byteOffset + samples.byteLength);
       return ipcRenderer.invoke('recording:chunk', meetingId, buf);
     },
+    micChunk: (meetingId: string, samples: Float32Array): Promise<void> => {
+      const buf = samples.buffer.slice(samples.byteOffset, samples.byteOffset + samples.byteLength);
+      return ipcRenderer.invoke('recording:mic-chunk', meetingId, buf);
+    },
+    stopNative: (meetingId?: string): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke('recording:stop-native', meetingId),
     stop: (opts?: { runFinalPass?: boolean }): Promise<RecordingStopResult | null> =>
       ipcRenderer.invoke('recording:stop', opts ?? {}),
     isActive: (): Promise<boolean> => ipcRenderer.invoke('recording:active'),

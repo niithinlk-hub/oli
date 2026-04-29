@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { startCapture, type CaptureHandle } from './capture';
+import { startCapture, startMicCapture, type CaptureHandle } from './capture';
 
 export type RecorderState = 'idle' | 'starting' | 'recording' | 'stopping' | 'error';
 
@@ -22,15 +22,51 @@ export function useRecorder(meetingId: string) {
         sampleRate: 16000,
         channels: 1
       });
-      const handle = await startCapture({
-        onChunk: (samples) => {
-          void window.floyd.recording.chunk(meetingId, samples);
-        },
-        onError: (err) => {
-          setError(err.message);
-          setState('error');
+
+      let handle: CaptureHandle;
+      const nativeAvailable = await window.floyd.recording.nativeAvailable();
+      if (nativeAvailable) {
+        try {
+          await window.floyd.recording.startNative(meetingId);
+          const micHandle = await startMicCapture({
+            onChunk: (samples) => {
+              void window.floyd.recording.micChunk(meetingId, samples);
+            },
+            onError: (err) => {
+              setError(err.message);
+              setState('error');
+            }
+          });
+          handle = {
+            stop: async () => {
+              await micHandle.stop();
+              await window.floyd.recording.stopNative(meetingId);
+            }
+          };
+        } catch (err) {
+          console.warn('native capture unavailable, falling back to getDisplayMedia:', err);
+          await window.floyd.recording.stopNative(meetingId).catch(() => undefined);
+          handle = await startCapture({
+            onChunk: (samples) => {
+              void window.floyd.recording.chunk(meetingId, samples);
+            },
+            onError: (captureErr) => {
+              setError(captureErr.message);
+              setState('error');
+            }
+          });
         }
-      });
+      } else {
+        handle = await startCapture({
+          onChunk: (samples) => {
+            void window.floyd.recording.chunk(meetingId, samples);
+          },
+          onError: (err) => {
+            setError(err.message);
+            setState('error');
+          }
+        });
+      }
       handleRef.current = handle;
       setState('recording');
     } catch (err) {

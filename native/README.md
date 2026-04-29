@@ -1,38 +1,22 @@
-# Native audio capture addon (Windows)
+# Native audio capture addon
 
-This folder reserves space for a native WASAPI loopback addon. The shipping app already captures system audio cross-platform via `getDisplayMedia` (see [src/renderer/audio/capture.ts](../src/renderer/audio/capture.ts)) backed by Electron's `setDisplayMediaRequestHandler({ useSystemPicker: true })`. That path works today on Windows 10 build 19041+ and is the default.
+This folder contains the Windows-only WASAPI loopback addon used by Oli to capture speakers without showing Electron's system audio picker.
 
-A native addon is the planned upgrade path: it removes the system picker prompt entirely.
-
-## Status
+## Layout
 
 | Folder | Target | Status |
 |--------|--------|--------|
-| `win-loopback/` | Windows WASAPI loopback (Win 10 2004+) | scaffold |
+| `win-loopback/` | Windows WASAPI loopback via `IMMDeviceEnumerator::GetDefaultAudioEndpoint(eRender, eConsole)` and `AUDCLNT_STREAMFLAGS_LOOPBACK` | implemented |
 
-## Why we shipped without it
+## Build
 
-Compiling the addon requires a Rust toolchain (`napi-rs`) plus the Windows SDK — heavyweight for a milestone-sized commit. The `getDisplayMedia` path is good enough for MVP.
-
-## Implementation outline
-
-The addon would expose:
-
-```ts
-interface NativeAudioAddon {
-  startCapture(opts: { sampleRate: 16000; channels: 1 }): void;
-  stopCapture(): void;
-  on(event: 'data', cb: (chunk: Float32Array) => void): void;
-  on(event: 'error', cb: (err: Error) => void): void;
-}
+```powershell
+npm --prefix native/win-loopback install
+npm --prefix native/win-loopback run build
 ```
 
-Then `src/main/audio/capture.ts` would prefer the addon when available and fall back to `getDisplayMedia`.
+The root `postinstall` runs the same `napi build --release --platform` path on a best-effort basis. If the Rust toolchain or Windows SDK is missing, the app still installs and falls back to renderer `getDisplayMedia`.
 
-## Plan to finish
+## Runtime contract
 
-1. Scaffold a `napi-rs` crate (cargo + per-addon `package.json`).
-2. Capture from `IMMDeviceEnumerator::GetDefaultAudioEndpoint(eRender, eConsole)` opened in loopback mode (`AUDCLNT_STREAMFLAGS_LOOPBACK`).
-3. Postinstall step builds the addon for the current Electron ABI.
-4. Feature-detect in `src/main/audio/capture.ts`.
-5. Bundle the prebuilt `.node` artifacts via `electron-builder.files`.
+The addon exports `LoopbackCapture`, whose `start(callback)` method invokes the callback with Node buffers containing 16 kHz mono Float32 samples. The main process converts those buffers to `Float32Array`, mixes them with mic chunks received over IPC, and writes the mixed stream through `src/main/audio/recorder.ts`.
