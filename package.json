@@ -1,6 +1,6 @@
 {
   "name": "oli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Oli — local-first AI meeting memory for Windows.",
   "main": "out/main/index.js",
   "author": "hussa",
@@ -104,7 +104,7 @@
         "provider": "github",
         "owner": "niithinlk-hub",
         "repo": "oli",
-        "releaseType": "release"
+        "releaseType": "draft"
       }
     ]
   }
