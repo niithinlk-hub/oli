@@ -105,7 +105,7 @@ function Welcome() {
         all on your device.
       </p>
       <p className="text-caption text-ink-muted mt-6">
-        Three quick configs and you're ready. Skip any step — you can finish later in Settings.
+        Three quick configs and you&rsquo;re ready. Skip any step — you can finish later in Settings.
       </p>
     </div>
   );
@@ -249,7 +249,7 @@ function CalendarStep() {
       </div>
 
       <p className="text-caption text-ink-muted mt-4">
-        Each provider needs an OAuth client ID — both flows live in Settings. Skip for now if you'd rather
+        Each provider needs an OAuth client ID — both flows live in Settings. Skip for now if you&rsquo;d rather
         configure later.
       </p>
     </div>
@@ -260,7 +260,7 @@ function DoneStep() {
   return (
     <div className="text-center pt-8">
       <OliIcon size={88} />
-      <h2 className="text-h2 font-display mt-4">You're set.</h2>
+      <h2 className="text-h2 font-display mt-4">You&rsquo;re set.</h2>
       <p className="text-body text-ink-secondary mt-2 max-w-md mx-auto">
         Hit <span className="font-medium text-ink-primary">+ New meeting</span> on the left, click Record,
         and Oli will start listening. Ask Oli to enhance your notes any time.

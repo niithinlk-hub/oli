@@ -39,11 +39,11 @@ export function BrandGuidelines() {
         </ul>
       </section>
       <section>
-        <h3 className="text-h3 mb-2">Don't</h3>
+        <h3 className="text-h3 mb-2">Don&rsquo;t</h3>
         <ul className="list-disc pl-5 space-y-1 text-ink-secondary">
           <li>Use brain or robot icons.</li>
           <li>Lean on neon or candy-colored gradients.</li>
-          <li>Copy Granola, Otter, or Notion's visual language.</li>
+          <li>Copy Granola, Otter, or Notion&rsquo;s visual language.</li>
           <li>Overuse sparkles or animated AI shimmer.</li>
         </ul>
       </section>

@@ -30,7 +30,7 @@ function buildIconBitmap(size: number): Buffer {
     for (let x = 0; x < size; x++) {
       const i = (y * size + x) * 4;
       let color = navy;
-      let alpha = 255;
+      const alpha = 255;
 
       // Rounded square mask
       const dxRect = Math.max(0, Math.abs(x - size / 2) - (size / 2 - cornerRadius));

@@ -56,7 +56,7 @@ export function AskOliChat({ meetingId }: Props) {
               Ask anything about this meeting.
             </p>
             <p className="text-caption text-ink-muted mt-1">
-              "What did we decide about pricing?" · "Who owns the next steps?"
+              &ldquo;What did we decide about pricing?&rdquo; · &ldquo;Who owns the next steps?&rdquo;
             </p>
           </div>
         )}

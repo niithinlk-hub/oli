@@ -28,7 +28,7 @@ export class WavWriter {
     if (!this.fh) throw new Error('WavWriter not opened');
     const buf = Buffer.alloc(samples.length * 2);
     for (let i = 0; i < samples.length; i++) {
-      let s = Math.max(-1, Math.min(1, samples[i]));
+      const s = Math.max(-1, Math.min(1, samples[i]));
       buf.writeInt16LE((s * 0x7fff) | 0, i * 2);
     }
     await this.fh.write(buf, 0, buf.length, HEADER_SIZE + this.bytesWritten);

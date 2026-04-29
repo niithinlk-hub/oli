@@ -217,7 +217,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
             </div>
             <p className="text-caption text-ink-muted mt-1">
               Create one at <span className="font-mono">console.cloud.google.com/apis/credentials</span>{' '}
-              as a "Desktop app" client. No secret needed.
+              as a &ldquo;Desktop app&rdquo; client. No secret needed.
             </p>
           </div>
 
@@ -277,7 +277,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
             </div>
             <p className="text-caption text-ink-muted mt-1">
               Register at <span className="font-mono">portal.azure.com</span> → App registrations.
-              Add redirect URI <span className="font-mono">http://127.0.0.1</span> as type "Public client".
+              Add redirect URI <span className="font-mono">http://127.0.0.1</span> as type &ldquo;Public client&rdquo;.
             </p>
           </div>
 
