@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { AppSettings } from '@shared/types';
 import { OliLogoHorizontal } from '../components/brand/OliLogoHorizontal';
+import { AiProviderSection } from '../components/AiProviderSection';
+import { WhisperModelSection } from '../components/WhisperModelSection';
 
 export function Settings({ onClose }: { onClose: () => void }) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [keyMasked, setKeyMasked] = useState<string | null>(null);
-  const [keyDraft, setKeyDraft] = useState('');
-  const [keyMessage, setKeyMessage] = useState<string | null>(null);
-  const [savingKey, setSavingKey] = useState(false);
 
   const [google, setGoogle] = useState<{
     googleConnected: boolean;
@@ -27,13 +25,11 @@ export function Settings({ onClose }: { onClose: () => void }) {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   const refresh = async () => {
-    const [s, masked, status] = await Promise.all([
+    const [s, status] = await Promise.all([
       window.floyd.settings.get(),
-      window.floyd.settings.getOpenAiKeyMasked(),
       window.floyd.calendar.status()
     ]);
     setSettings(s);
-    setKeyMasked(masked);
     setGoogle(status);
     setClientIdDraft(status.googleClientId ?? '');
     setOutlookIdDraft(status.outlookClientId ?? '');
@@ -71,21 +67,6 @@ export function Settings({ onClose }: { onClose: () => void }) {
       await window.floyd.settings.setWhisperModel(path);
       await refresh();
     }
-  };
-
-  const saveOpenAiKey = async () => {
-    if (!keyDraft.trim()) return;
-    setSavingKey(true);
-    setKeyMessage(null);
-    const res = await window.floyd.settings.setOpenAiKey(keyDraft.trim());
-    setKeyMessage(res.message);
-    setKeyDraft('');
-    await refresh();
-    setSavingKey(false);
-  };
-  const removeOpenAiKey = async () => {
-    await window.floyd.settings.setOpenAiKey(null);
-    await refresh();
   };
 
   const saveClientId = async () => {
@@ -154,44 +135,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
         className="flex-1 overflow-y-auto p-8 space-y-6 max-w-3xl"
         style={{ background: 'var(--oli-gradient-soft-bg)' }}
       >
-        <Section
-          title="OpenAI"
-          subtitle="GPT-4o powers note enhancement. Your key is encrypted via the OS keychain (safeStorage)."
-        >
-          {keyMasked ? (
-            <div className="flex items-center justify-between rounded-md border border-line bg-white px-3 py-2">
-              <div>
-                <p className="text-body-sm font-medium">Configured</p>
-                <p className="text-caption text-ink-muted font-mono">{keyMasked}</p>
-              </div>
-              <button
-                onClick={removeOpenAiKey}
-                className="text-btn px-3 py-1.5 rounded-button border border-line text-ink-secondary hover:bg-surface-cloud"
-              >
-                Remove
-              </button>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <input
-                type="password"
-                value={keyDraft}
-                onChange={(e) => setKeyDraft(e.target.value)}
-                placeholder="sk-…"
-                className="flex-1 px-3 py-2 rounded-md border border-line bg-white text-body-sm font-mono"
-              />
-              <button
-                disabled={savingKey || !keyDraft.trim()}
-                onClick={saveOpenAiKey}
-                className="px-4 py-2 rounded-button text-btn text-white disabled:opacity-50"
-                style={{ background: 'var(--oli-gradient-primary)' }}
-              >
-                {savingKey ? 'Validating…' : 'Save'}
-              </button>
-            </div>
-          )}
-          {keyMessage && <p className="text-caption text-ink-secondary">{keyMessage}</p>}
-        </Section>
+        <AiProviderSection />
+        <WhisperModelSection />
 
         <Section
           title="Google Calendar"

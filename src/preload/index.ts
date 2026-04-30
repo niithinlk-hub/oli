@@ -103,7 +103,48 @@ const api = {
       question: string;
       history: { role: 'user' | 'assistant'; content: string }[];
     }): Promise<{ ok: boolean; markdown?: string; message?: string }> =>
-      ipcRenderer.invoke('llm:ask', args)
+      ipcRenderer.invoke('llm:ask', args),
+    listProviders: (): Promise<
+      { id: string; label: string; configured: boolean; model: string }[]
+    > => ipcRenderer.invoke('llm:listProviders'),
+    getActiveProvider: (): Promise<string> => ipcRenderer.invoke('llm:getActiveProvider'),
+    setActiveProvider: (id: string): Promise<void> =>
+      ipcRenderer.invoke('llm:setActiveProvider', id),
+    setProviderKey: (
+      id: string,
+      key: string | null
+    ): Promise<{ ok: boolean; message?: string }> =>
+      ipcRenderer.invoke('llm:setProviderKey', id, key),
+    getModelOverride: (id: string): Promise<string | null> =>
+      ipcRenderer.invoke('llm:getModelOverride', id),
+    setModelOverride: (id: string, model: string | null): Promise<void> =>
+      ipcRenderer.invoke('llm:setModelOverride', id, model),
+    getMaskedKey: (id: string): Promise<string | null> =>
+      ipcRenderer.invoke('llm:getMaskedKey', id)
+  },
+  whisper: {
+    listCatalog: (): Promise<
+      { id: string; label: string; bytes: number; description: string }[]
+    > => ipcRenderer.invoke('whisper:listCatalog'),
+    listInstalled: (): Promise<string[]> => ipcRenderer.invoke('whisper:listInstalled'),
+    downloadModel: (modelId: string): Promise<{ ok: boolean; path?: string; message?: string }> =>
+      ipcRenderer.invoke('whisper:downloadModel', modelId),
+    cancelDownload: (modelId: string): Promise<void> =>
+      ipcRenderer.invoke('whisper:cancelDownload', modelId),
+    deleteModel: (modelId: string): Promise<void> =>
+      ipcRenderer.invoke('whisper:deleteModel', modelId),
+    selectModel: (modelId: string): Promise<void> =>
+      ipcRenderer.invoke('whisper:selectModel', modelId),
+    onProgress: (
+      cb: (p: { modelId: string; loaded: number; total: number; percent: number }) => void
+    ) => {
+      const handler = (
+        _e: IpcRendererEvent,
+        p: { modelId: string; loaded: number; total: number; percent: number }
+      ) => cb(p);
+      ipcRenderer.on('whisper:download-progress', handler);
+      return () => ipcRenderer.removeListener('whisper:download-progress', handler);
+    }
   },
   menu: {
     on: (channel:

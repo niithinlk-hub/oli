@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { OliLogoStacked } from '../components/brand/OliLogoStacked';
 import { OliIcon } from '../components/brand/OliIcon';
+import { AiProviderSection } from '../components/AiProviderSection';
+import { WhisperModelSection } from '../components/WhisperModelSection';
 
-const STEPS = ['welcome', 'whisper', 'openai', 'calendar', 'done'] as const;
+const STEPS = ['welcome', 'model', 'ai', 'calendar', 'done'] as const;
 type Step = (typeof STEPS)[number];
 
 interface Props {
@@ -42,8 +44,8 @@ export function Onboarding({ onClose }: Props) {
           <div className="flex-1 p-8 min-h-[460px] flex flex-col">
             <div className="flex-1">
               {step === 'welcome' && <Welcome />}
-              {step === 'whisper' && <WhisperStep />}
-              {step === 'openai' && <OpenAiStep />}
+              {step === 'model' && <ModelDownloadStep />}
+              {step === 'ai' && <AiProviderStep />}
               {step === 'calendar' && <CalendarStep />}
               {step === 'done' && <DoneStep />}
             </div>
@@ -87,7 +89,9 @@ function Sidebar({ step }: { step: Step }) {
             >
               {STEPS.indexOf(step) > i ? '✓' : i + 1}
             </span>
-            <span className="capitalize">{s === 'openai' ? 'OpenAI' : s}</span>
+            <span className="capitalize">
+              {s === 'ai' ? 'AI provider' : s === 'model' ? 'Speech model' : s}
+            </span>
           </li>
         ))}
       </ol>
@@ -111,124 +115,33 @@ function Welcome() {
   );
 }
 
-function WhisperStep() {
-  const [bin, setBin] = useState<string | null>(null);
-  const [model, setModel] = useState<string | null>(null);
-
-  useEffect(() => {
-    void window.floyd.settings.get().then((s) => {
-      setBin(s.whisperBinaryPath);
-      setModel(s.whisperModelPath);
-    });
-  }, []);
-
-  const pickBin = async () => {
-    const p = await window.floyd.settings.pickFile({
-      title: 'Select whisper.cpp binary (whisper-cli.exe)',
-      filters: [{ name: 'Executable', extensions: ['exe'] }]
-    });
-    if (p) {
-      await window.floyd.settings.setWhisperBinary(p);
-      setBin(p);
-    }
-  };
-  const pickModel = async () => {
-    const p = await window.floyd.settings.pickFile({
-      title: 'Select ggml whisper model (.bin)',
-      filters: [{ name: 'GGML model', extensions: ['bin'] }]
-    });
-    if (p) {
-      await window.floyd.settings.setWhisperModel(p);
-      setModel(p);
-    }
-  };
-
+function ModelDownloadStep() {
   return (
     <div>
-      <h3 className="text-h3 font-display">Local transcription</h3>
+      <h3 className="text-h3 font-display">Speech model</h3>
       <p className="text-body-sm text-ink-secondary mt-1">
-        Oli uses whisper.cpp on your machine — your audio never leaves the device.
+        Oli transcribes locally with whisper.cpp. Pick a model size — bigger = more accurate, slower. You can swap any time in Settings.
       </p>
-      <ol className="mt-4 space-y-3 text-body-sm">
-        <li>
-          <strong>1. Download a Windows whisper.cpp release</strong>
-          <p className="text-caption text-ink-muted mt-1">
-            <span className="font-mono">github.com/ggerganov/whisper.cpp/releases</span> — pick the latest
-            <span className="font-mono"> whisper-bin-x64</span> archive and extract it.
-          </p>
-        </li>
-        <li>
-          <strong>2. Download a model</strong>
-          <p className="text-caption text-ink-muted mt-1">
-            <span className="font-mono">huggingface.co/ggerganov/whisper.cpp</span> — recommended:
-            <span className="font-mono"> ggml-medium.bin</span> (~1.5 GB).
-          </p>
-        </li>
-      </ol>
-
-      <div className="mt-5 space-y-3">
-        <PickerRow label="whisper-cli.exe" value={bin} onPick={pickBin} />
-        <PickerRow label="ggml-*.bin" value={model} onPick={pickModel} />
+      <p className="text-caption text-ink-muted mt-3">
+        Audio never leaves your machine. Skip and pick later if you&rsquo;d rather.
+      </p>
+      <div className="mt-4">
+        <WhisperModelSection />
       </div>
     </div>
   );
 }
 
-function OpenAiStep() {
-  const [hasKey, setHasKey] = useState(false);
-  const [draft, setDraft] = useState('');
-  const [msg, setMsg] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    void window.floyd.settings.hasOpenAiKey().then(setHasKey);
-  }, []);
-
-  const save = async () => {
-    if (!draft.trim()) return;
-    setSaving(true);
-    const r = await window.floyd.settings.setOpenAiKey(draft.trim());
-    setMsg(r.message);
-    if (r.ok) setHasKey(true);
-    setSaving(false);
-    setDraft('');
-  };
-
+function AiProviderStep() {
   return (
     <div>
-      <h3 className="text-h3 font-display">Ask Oli</h3>
+      <h3 className="text-h3 font-display">AI provider</h3>
       <p className="text-body-sm text-ink-secondary mt-1">
-        GPT-4o turns rough notes plus the transcript into structured summaries, action items, and decisions.
+        Powers note enhancement and Ask Oli. Pick whichever you have a key for — OpenAI, Anthropic, Google, or Groq. All keys encrypted via Windows DPAPI.
       </p>
-      <p className="text-caption text-ink-muted mt-3">
-        Get a key at <span className="font-mono">platform.openai.com/api-keys</span>. Stored encrypted via
-        Windows DPAPI — never written in plain text.
-      </p>
-
-      {hasKey ? (
-        <div className="mt-5 rounded-md border border-line bg-surface-cloud px-4 py-3 text-body-sm flex items-center gap-2">
-          <span className="text-oli-teal">✓</span> API key saved.
-        </div>
-      ) : (
-        <div className="mt-5 flex gap-2">
-          <input
-            type="password"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="sk-…"
-            className="flex-1 px-3 py-2 rounded-md border border-line bg-white text-body-sm font-mono"
-          />
-          <button
-            disabled={saving || !draft.trim()}
-            onClick={save}
-            className="px-4 py-2 rounded-button text-btn text-white disabled:opacity-50"
-            style={{ background: 'var(--oli-gradient-primary)' }}
-          >
-            {saving ? 'Validating…' : 'Save'}
-          </button>
-        </div>
-      )}
-      {msg && <p className="text-caption text-ink-secondary mt-2">{msg}</p>}
+      <div className="mt-4">
+        <AiProviderSection />
+      </div>
     </div>
   );
 }
@@ -265,30 +178,6 @@ function DoneStep() {
         Hit <span className="font-medium text-ink-primary">+ New meeting</span> on the left, click Record,
         and Oli will start listening. Ask Oli to enhance your notes any time.
       </p>
-    </div>
-  );
-}
-
-function PickerRow({
-  label,
-  value,
-  onPick
-}: {
-  label: string;
-  value: string | null;
-  onPick: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 px-3 py-2 rounded-md bg-surface-cloud border border-line text-caption font-mono truncate">
-        {value || <span className="text-ink-muted">{label}</span>}
-      </div>
-      <button
-        onClick={onPick}
-        className="px-3 py-2 rounded-button border border-line bg-white hover:bg-surface-cloud text-btn"
-      >
-        Browse…
-      </button>
     </div>
   );
 }

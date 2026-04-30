@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { app } from 'electron';
 import { settingsRepo, SETTINGS_KEYS } from '../db/settings';
@@ -24,7 +24,23 @@ export function defaultWhisperBinary(): string | null {
   return bundledPath('whisper-bin', 'whisper-cli.exe');
 }
 
+/**
+ * Default model path resolution:
+ * 1. Explicit Settings path (user pick).
+ * 2. Any *.bin file under <userData>/models/ (downloaded via Settings).
+ * 3. Bundled resources/whisper-models/*.bin (only if installer ships one).
+ *    The 0.1.4+ installer no longer bundles a model, so this is the dev-only path.
+ */
 export function defaultWhisperModel(): string | null {
+  const userModels = join(app.getPath('userData'), 'models');
+  if (existsSync(userModels)) {
+    try {
+      const files = readdirSync(userModels).filter((f) => f.endsWith('.bin'));
+      if (files.length > 0) return join(userModels, files[0]);
+    } catch {
+      /* ignore */
+    }
+  }
   return bundledPath('whisper-models', 'ggml-base.en-q8_0.bin');
 }
 

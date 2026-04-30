@@ -1,25 +1,65 @@
 import { ipcMain } from 'electron';
 import { meetingsRepo, notesRepo, transcriptRepo } from '../db/repo';
-import { enhance, ask, validateKey, OpenAiNotConfiguredError } from '../llm/openai-client';
+import {
+  enhance,
+  ask,
+  validateKey,
+  setProviderKey,
+  deleteProviderKey,
+  hasProviderKey,
+  maskedProviderKey,
+  getActiveProvider,
+  setActiveProvider,
+  listProviderStatus,
+  getModelOverride,
+  setModelOverride,
+  PROVIDERS,
+  LlmNotConfiguredError,
+  type ProviderId
+} from '../llm/providers';
 import { getTemplate, listTemplates } from '../llm/templates';
 import { htmlToMarkdown } from '../llm/html-to-markdown';
-import { setSecret, getSecret, deleteSecret, hasSecret, SECRET_NAMES } from '../secrets';
 
 export function registerLlmIpc(): void {
   ipcMain.handle('templates:list', () => listTemplates());
 
+  // Backwards-compat aliases that map onto the OpenAI provider.
   ipcMain.handle('settings:setOpenAiKey', async (_e, key: string | null) => {
     if (!key) {
-      await deleteSecret(SECRET_NAMES.openAiKey);
+      await deleteProviderKey('openai');
       return { ok: true, message: 'API key removed.' };
     }
-    const v = await validateKey(key);
+    const v = await validateKey('openai', key);
     if (!v.ok) return { ok: false, message: `Invalid API key: ${v.message ?? 'auth probe failed'}` };
-    await setSecret(SECRET_NAMES.openAiKey, key);
+    await setProviderKey('openai', key);
     return { ok: true, message: 'API key saved.' };
   });
+  ipcMain.handle('settings:hasOpenAiKey', () => hasProviderKey('openai'));
+  ipcMain.handle('settings:getOpenAiKeyMasked', () => maskedProviderKey('openai'));
 
-  ipcMain.handle('settings:hasOpenAiKey', () => hasSecret(SECRET_NAMES.openAiKey));
+  // Multi-provider IPC.
+  ipcMain.handle('llm:listProviders', () => listProviderStatus());
+  ipcMain.handle('llm:getActiveProvider', () => getActiveProvider());
+  ipcMain.handle('llm:setActiveProvider', (_e, p: ProviderId) => {
+    if (!(p in PROVIDERS)) throw new Error(`unknown provider: ${p}`);
+    setActiveProvider(p);
+  });
+  ipcMain.handle('llm:setProviderKey', async (_e, p: ProviderId, key: string | null) => {
+    if (!(p in PROVIDERS)) throw new Error(`unknown provider: ${p}`);
+    if (!key) {
+      await deleteProviderKey(p);
+      return { ok: true, message: 'API key removed.' };
+    }
+    const v = await validateKey(p, key);
+    if (!v.ok) return { ok: false, message: `Invalid API key: ${v.message ?? 'auth probe failed'}` };
+    await setProviderKey(p, key);
+    return { ok: true, message: 'API key saved.' };
+  });
+  ipcMain.handle('llm:getModelOverride', (_e, p: ProviderId) => getModelOverride(p));
+  ipcMain.handle('llm:setModelOverride', (_e, p: ProviderId, model: string | null) =>
+    setModelOverride(p, model)
+  );
+  ipcMain.handle('llm:getMaskedKey', (_e, p: ProviderId) => maskedProviderKey(p));
 
   ipcMain.handle(
     'llm:enhance',
@@ -47,24 +87,13 @@ export function registerLlmIpc(): void {
         return { ok: true, markdown: md };
       } catch (err) {
         meetingsRepo.update(args.meetingId, { status: 'done' });
-        if (err instanceof OpenAiNotConfiguredError) {
+        if (err instanceof LlmNotConfiguredError) {
           return { ok: false, message: err.message };
         }
         return { ok: false, message: (err as Error).message };
       }
     }
   );
-
-  // Re-expose for the secret variant — settings.ts already covers whisper paths
-  ipcMain.handle('settings:openAiKeyExists', async () => {
-    return hasSecret(SECRET_NAMES.openAiKey);
-  });
-
-  ipcMain.handle('settings:getOpenAiKeyMasked', async () => {
-    const key = await getSecret(SECRET_NAMES.openAiKey);
-    if (!key) return null;
-    return `${key.slice(0, 3)}…${key.slice(-4)}`;
-  });
 
   ipcMain.handle(
     'llm:ask',
@@ -88,7 +117,7 @@ export function registerLlmIpc(): void {
         });
         return { ok: true, markdown: md };
       } catch (err) {
-        if (err instanceof OpenAiNotConfiguredError) return { ok: false, message: err.message };
+        if (err instanceof LlmNotConfiguredError) return { ok: false, message: err.message };
         return { ok: false, message: (err as Error).message };
       }
     }
