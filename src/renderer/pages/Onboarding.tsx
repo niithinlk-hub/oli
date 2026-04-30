@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { OliLogoStacked } from '../components/brand/OliLogoStacked';
 import { OliIcon } from '../components/brand/OliIcon';
 import { AiProviderSection } from '../components/AiProviderSection';
+import { SttProviderSection } from '../components/SttProviderSection';
 import { WhisperModelSection } from '../components/WhisperModelSection';
 
-const STEPS = ['welcome', 'model', 'ai', 'calendar', 'done'] as const;
+const STEPS = ['welcome', 'ai', 'stt', 'model', 'calendar', 'done'] as const;
 type Step = (typeof STEPS)[number];
 
 interface Props {
@@ -42,10 +43,11 @@ export function Onboarding({ onClose }: Props) {
         <div className="flex">
           <Sidebar step={step} />
           <div className="flex-1 p-8 min-h-[460px] flex flex-col">
-            <div className="flex-1">
+            <div className="flex-1 overflow-y-auto pr-1">
               {step === 'welcome' && <Welcome />}
-              {step === 'model' && <ModelDownloadStep />}
               {step === 'ai' && <AiProviderStep />}
+              {step === 'stt' && <SttStep />}
+              {step === 'model' && <ModelDownloadStep />}
               {step === 'calendar' && <CalendarStep />}
               {step === 'done' && <DoneStep />}
             </div>
@@ -69,7 +71,7 @@ function Sidebar({ step }: { step: Step }) {
     >
       <OliIcon size={36} />
       <p className="mt-4 text-h4 font-display leading-tight">Welcome to Oli</p>
-      <p className="text-caption opacity-80 mt-1">Setup · 4 steps</p>
+      <p className="text-caption opacity-80 mt-1">Setup · {STEPS.length - 1} steps</p>
       <ol className="mt-6 space-y-2">
         {STEPS.map((s, i) => (
           <li
@@ -90,7 +92,13 @@ function Sidebar({ step }: { step: Step }) {
               {STEPS.indexOf(step) > i ? '✓' : i + 1}
             </span>
             <span className="capitalize">
-              {s === 'ai' ? 'AI provider' : s === 'model' ? 'Speech model' : s}
+              {s === 'ai'
+                ? 'AI provider'
+                : s === 'stt'
+                  ? 'Transcription'
+                  : s === 'model'
+                    ? 'Local model (optional)'
+                    : s}
             </span>
           </li>
         ))}
@@ -115,15 +123,35 @@ function Welcome() {
   );
 }
 
+function SttStep() {
+  return (
+    <div>
+      <h3 className="text-h3 font-display">Transcription engine</h3>
+      <p className="text-body-sm text-ink-secondary mt-1">
+        Pick how Oli turns audio into text. <span className="font-medium text-ink-primary">Groq Cloud</span>{' '}
+        is fast (~10x realtime, ~7% WER, free tier). <span className="font-medium text-ink-primary">Local</span>{' '}
+        whisper.cpp is private and offline.
+      </p>
+      <p className="text-caption text-ink-muted mt-3">
+        Switch any time in Settings. Recommended: Groq if you have an API key.
+      </p>
+      <div className="mt-4">
+        <SttProviderSection />
+      </div>
+    </div>
+  );
+}
+
 function ModelDownloadStep() {
   return (
     <div>
-      <h3 className="text-h3 font-display">Speech model</h3>
+      <h3 className="text-h3 font-display">Local speech model (optional)</h3>
       <p className="text-body-sm text-ink-secondary mt-1">
-        Oli transcribes locally with whisper.cpp. Pick a model size — bigger = more accurate, slower. You can swap any time in Settings.
+        Only needed if you picked <span className="font-medium text-ink-primary">Local</span>{' '}
+        transcription on the previous step. Pick a ggml model size — bigger = more accurate, slower.
       </p>
       <p className="text-caption text-ink-muted mt-3">
-        Audio never leaves your machine. Skip and pick later if you&rsquo;d rather.
+        Skip if you&rsquo;re using Groq Cloud — no model download required.
       </p>
       <div className="mt-4">
         <WhisperModelSection />

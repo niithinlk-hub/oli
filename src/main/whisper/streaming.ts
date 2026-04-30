@@ -1,4 +1,6 @@
-import { transcribeFile, type WhisperSegment, WhisperNotConfiguredError } from './worker';
+import { transcribeWav, getConcurrency, SttNotConfiguredError } from '../stt';
+import type { WhisperSegment } from './worker';
+import { WhisperNotConfiguredError } from './worker';
 import type { ChunkWindow } from '../audio/recorder';
 
 export interface StreamingTranscriberCallbacks {
@@ -7,21 +9,28 @@ export interface StreamingTranscriberCallbacks {
 }
 
 /**
- * Serial whisper executor: queue chunk windows as recording produces them,
- * transcribe in order, deliver segments via callback. Skips silently when
- * whisper isn't configured (live transcript pane just stays empty).
+ * Concurrent STT executor. Multiple chunk windows can transcribe in parallel
+ * — bounded by `getConcurrency()` (defaults: 4 for cloud Groq, 1 for local
+ * whisper.cpp where parallel spawns thrash the CPU).
+ *
+ * Order is NOT preserved on the wire — but each segment carries absolute
+ * startMs/endMs anchored to the window's offset, so the renderer can sort.
  */
 export class StreamingTranscriber {
   private queue: ChunkWindow[] = [];
-  private running = false;
+  private inflight = 0;
   private cancelled = false;
   private warnedNotConfigured = false;
-  constructor(private cb: StreamingTranscriberCallbacks) {}
+  private maxConcurrent: number;
+
+  constructor(private cb: StreamingTranscriberCallbacks) {
+    this.maxConcurrent = Math.max(1, getConcurrency());
+  }
 
   enqueue(window: ChunkWindow): void {
     if (this.cancelled) return;
     this.queue.push(window);
-    void this.tick();
+    this.tick();
   }
 
   cancel(): void {
@@ -29,29 +38,35 @@ export class StreamingTranscriber {
     this.queue = [];
   }
 
-  private async tick(): Promise<void> {
-    if (this.running || this.cancelled) return;
-    const next = this.queue.shift();
-    if (!next) return;
-    this.running = true;
-    try {
-      const segs = await transcribeFile({
-        wavPath: next.filePath,
-        offsetMs: next.startMs
+  private tick(): void {
+    if (this.cancelled) return;
+    while (this.inflight < this.maxConcurrent && this.queue.length > 0) {
+      const next = this.queue.shift();
+      if (!next) break;
+      this.inflight += 1;
+      void this.runOne(next).finally(() => {
+        this.inflight -= 1;
+        if (!this.cancelled && this.queue.length > 0) this.tick();
       });
-      if (!this.cancelled) this.cb.onSegments(next, segs);
+    }
+  }
+
+  private async runOne(window: ChunkWindow): Promise<void> {
+    try {
+      const segs = await transcribeWav({
+        wavPath: window.filePath,
+        offsetMs: window.startMs
+      });
+      if (!this.cancelled) this.cb.onSegments(window, segs);
     } catch (err) {
-      if (err instanceof WhisperNotConfiguredError) {
+      if (err instanceof WhisperNotConfiguredError || err instanceof SttNotConfiguredError) {
         if (!this.warnedNotConfigured) {
-          console.warn('whisper not configured — skipping live transcription');
+          console.warn('STT not configured — skipping live transcription:', (err as Error).message);
           this.warnedNotConfigured = true;
         }
-      } else {
-        this.cb.onError(next, err as Error);
+        return;
       }
-    } finally {
-      this.running = false;
-      if (!this.cancelled && this.queue.length > 0) void this.tick();
+      this.cb.onError(window, err as Error);
     }
   }
 }

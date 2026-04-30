@@ -13,7 +13,7 @@ import {
   stopNativeLoopbackRecording
 } from '../audio/capture';
 import { StreamingTranscriber } from '../whisper/streaming';
-import { transcribeFile } from '../whisper/worker';
+import { transcribeWav } from '../stt';
 import { meetingsRepo, transcriptRepo } from '../db/repo';
 import type { PartialTranscriptEvent, RecordingStartArgs } from '@shared/types';
 
@@ -128,7 +128,7 @@ export function registerRecordingIpc(): void {
 
     if (opts.runFinalPass) {
       try {
-        const segs = await transcribeFile({ wavPath: result.audioPath, offsetMs: 0 });
+        const segs = await transcribeWav({ wavPath: result.audioPath, offsetMs: 0 });
         transcriptRepo.deleteForMeeting(result.meetingId);
         for (const s of segs) {
           transcriptRepo.insert({

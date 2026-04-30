@@ -2,12 +2,11 @@ import { app } from 'electron';
 import { join } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { WavWriter, writeWavFile } from './wav';
+import { getChunkSeconds } from '../stt';
 import type { RecordingStartArgs, RecordingStopResult } from '@shared/types';
 
 const SAMPLE_RATE = 16000;
 const CHANNELS = 1;
-const CHUNK_WINDOW_SECONDS = 10;
-const CHUNK_WINDOW_SAMPLES = SAMPLE_RATE * CHUNK_WINDOW_SECONDS;
 
 export interface ChunkWindow {
   meetingId: string;
@@ -29,6 +28,8 @@ interface ActiveSession {
   rollOffset: number;
   windowIndex: number;
   windowDir: string;
+  windowSeconds: number;
+  windowSamples: number;
   onWindowReady: WindowReadyCallback | null;
 }
 
@@ -54,16 +55,21 @@ export async function startRecording(args: RecordingStartArgs): Promise<{ audioP
   });
   await fullWriter.open();
 
+  const windowSeconds = getChunkSeconds();
+  const windowSamples = SAMPLE_RATE * windowSeconds;
+
   session = {
     meetingId: args.meetingId,
     fullWriter,
     fullPath,
     startedAt: Date.now(),
     totalSamples: 0,
-    rollBuffer: new Float32Array(CHUNK_WINDOW_SAMPLES),
+    rollBuffer: new Float32Array(windowSamples),
     rollOffset: 0,
     windowIndex: 0,
     windowDir,
+    windowSeconds,
+    windowSamples,
     onWindowReady: null
   };
 
@@ -83,12 +89,12 @@ export async function appendChunk(meetingId: string, samples: Float32Array): Pro
 
   let offset = 0;
   while (offset < samples.length) {
-    const space = CHUNK_WINDOW_SAMPLES - session.rollOffset;
+    const space = session.windowSamples - session.rollOffset;
     const take = Math.min(space, samples.length - offset);
     session.rollBuffer.set(samples.subarray(offset, offset + take), session.rollOffset);
     session.rollOffset += take;
     offset += take;
-    if (session.rollOffset === CHUNK_WINDOW_SAMPLES) {
+    if (session.rollOffset === session.windowSamples) {
       await flushWindow(session);
     }
   }
@@ -96,7 +102,7 @@ export async function appendChunk(meetingId: string, samples: Float32Array): Pro
 
 async function flushWindow(s: ActiveSession): Promise<void> {
   const slice = s.rollBuffer.slice(0, s.rollOffset);
-  const startMs = s.windowIndex * CHUNK_WINDOW_SECONDS * 1000;
+  const startMs = s.windowIndex * s.windowSeconds * 1000;
   const endMs = startMs + (slice.length / SAMPLE_RATE) * 1000;
   const filePath = join(s.windowDir, `w${String(s.windowIndex).padStart(4, '0')}.wav`);
   await writeWavFile(filePath, slice, SAMPLE_RATE, CHANNELS);

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { AppSettings } from '@shared/types';
 import { OliLogoHorizontal } from '../components/brand/OliLogoHorizontal';
 import { AiProviderSection } from '../components/AiProviderSection';
+import { SttProviderSection } from '../components/SttProviderSection';
 import { WhisperModelSection } from '../components/WhisperModelSection';
 
 export function Settings({ onClose }: { onClose: () => void }) {
@@ -136,6 +137,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         style={{ background: 'var(--oli-gradient-soft-bg)' }}
       >
         <AiProviderSection />
+        <SttProviderSection />
         <WhisperModelSection />
 
         <Section

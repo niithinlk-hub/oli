@@ -5,6 +5,7 @@ import { registerMeetingIpc } from './ipc/meetings';
 import { registerRecordingIpc } from './ipc/recording';
 import { registerSettingsIpc } from './ipc/settings';
 import { registerLlmIpc } from './ipc/llm';
+import { registerSttIpc } from './ipc/stt';
 import { registerCalendarIpc } from './ipc/calendar';
 import { registerExportIpc } from './ipc/export';
 import { seedBuiltInTemplates } from './llm/templates';
@@ -57,6 +58,7 @@ app.whenReady().then(() => {
   registerRecordingIpc();
   registerSettingsIpc();
   registerLlmIpc();
+  registerSttIpc();
   registerCalendarIpc();
   registerExportIpc();
   ipcMain.handle('app:version', () => app.getVersion());

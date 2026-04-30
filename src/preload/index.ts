@@ -136,6 +136,25 @@ const api = {
     getMaskedKey: (id: string): Promise<string | null> =>
       ipcRenderer.invoke('llm:getMaskedKey', id)
   },
+  stt: {
+    get: (): Promise<{
+      provider: 'local' | 'groq';
+      groqModel: string;
+      chunkSeconds: number;
+      concurrency: number;
+      groqKeyConfigured: boolean;
+    }> => ipcRenderer.invoke('stt:get'),
+    setProvider: (p: 'local' | 'groq'): Promise<void> => ipcRenderer.invoke('stt:setProvider', p),
+    setGroqModel: (m: string | null): Promise<void> => ipcRenderer.invoke('stt:setGroqModel', m),
+    setChunkSeconds: (n: number | null): Promise<void> =>
+      ipcRenderer.invoke('stt:setChunkSeconds', n),
+    setConcurrency: (n: number | null): Promise<void> =>
+      ipcRenderer.invoke('stt:setConcurrency', n),
+    listGroqModels: (): Promise<{ id: string; label: string; note: string }[]> =>
+      ipcRenderer.invoke('stt:listGroqModels'),
+    pingGroq: (model: string | null): Promise<{ ok: boolean; message?: string }> =>
+      ipcRenderer.invoke('stt:pingGroq', model)
+  },
   whisper: {
     listCatalog: (): Promise<
       { id: string; label: string; bytes: number; description: string }[]
