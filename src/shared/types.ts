@@ -83,5 +83,7 @@ export interface PartialTranscriptEvent {
 export interface AppSettings {
   whisperBinaryPath: string | null;
   whisperModelPath: string | null;
+  whisperBinaryDefault: string | null;
+  whisperModelDefault: string | null;
   openAiKeyPresent: boolean;
 }

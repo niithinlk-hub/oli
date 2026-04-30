@@ -1,6 +1,6 @@
 {
   "name": "oli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Oli — local-first AI meeting memory for Windows.",
   "main": "out/main/index.js",
   "author": "hussa",
@@ -76,15 +76,19 @@
       "package.json"
     ],
     "asarUnpack": [
-      "native/win-loopback/*.node"
+      "native/win-loopback/*.node",
+      "resources/whisper-bin/**",
+      "resources/whisper-models/**",
+      "resources/icons/**"
     ],
     "win": {
       "target": [
         { "target": "nsis", "arch": ["x64"] }
       ],
-      "publisherName": "Oli",
+      "icon": "resources/icons/oli.png",
       "artifactName": "Oli-${version}-Setup.${ext}",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "verifyUpdateCodeSignature": false
     },
     "nsis": {
       "oneClick": false,

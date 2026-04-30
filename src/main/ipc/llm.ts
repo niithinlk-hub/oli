@@ -13,8 +13,8 @@ export function registerLlmIpc(): void {
       await deleteSecret(SECRET_NAMES.openAiKey);
       return { ok: true, message: 'API key removed.' };
     }
-    const ok = await validateKey(key);
-    if (!ok) return { ok: false, message: 'Invalid API key (auth probe failed).' };
+    const v = await validateKey(key);
+    if (!v.ok) return { ok: false, message: `Invalid API key: ${v.message ?? 'auth probe failed'}` };
     await setSecret(SECRET_NAMES.openAiKey, key);
     return { ok: true, message: 'API key saved.' };
   });

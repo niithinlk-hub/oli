@@ -89,7 +89,13 @@ export const meetingsRepo = {
         `SELECT m.*, 'title' AS match_type, m.title AS snippet FROM meetings m WHERE m.title LIKE ? ESCAPE '\\'
          UNION
          SELECT m.*, 'notes' AS match_type,
-           substr(n.raw_markdown, max(1, instr(lower(n.raw_markdown), lower(?)) - 30), 160) AS snippet
+           CASE
+             WHEN instr(lower(n.raw_markdown), lower(?)) > 0
+               THEN substr(n.raw_markdown, max(1, instr(lower(n.raw_markdown), lower(?)) - 30), 160)
+             WHEN instr(lower(coalesce(n.enhanced_markdown,'')), lower(?)) > 0
+               THEN substr(coalesce(n.enhanced_markdown,''), max(1, instr(lower(coalesce(n.enhanced_markdown,'')), lower(?)) - 30), 160)
+             ELSE substr(coalesce(n.raw_markdown, n.enhanced_markdown, ''), 1, 160)
+           END AS snippet
          FROM meetings m JOIN notes n ON n.meeting_id = m.id
          WHERE n.raw_markdown LIKE ? ESCAPE '\\' OR n.enhanced_markdown LIKE ? ESCAPE '\\'
          UNION
@@ -99,7 +105,7 @@ export const meetingsRepo = {
          ORDER BY started_at DESC
          LIMIT ?`
       )
-      .all(pattern, q, pattern, pattern, pattern, limit) as any[];
+      .all(pattern, q, q, q, q, pattern, pattern, pattern, limit) as any[];
     return rows.map((r) => ({
       meeting: rowToMeeting(r),
       snippet: (r.snippet as string)?.replace(/<[^>]+>/g, ' ').slice(0, 200) ?? '',

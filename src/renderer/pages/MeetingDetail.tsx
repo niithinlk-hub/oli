@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Meeting, NoteDoc, TranscriptSegment } from '@shared/types';
 import { RecordButton } from '../components/RecordButton';
 import { NotesEditor } from '../components/NotesEditor';
@@ -34,11 +34,12 @@ export function MeetingDetail({ meetingId }: Props) {
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
   const notesRef = useRef<{ flush: () => void }>({ flush: () => {} });
+  const recordToggleRef = useRef<{ toggle: () => Promise<void> } | null>(null);
   const isRecording = meeting?.status === 'recording';
   const elapsed = useElapsedSince(isRecording ? meeting!.startedAt : null);
   const deleteMeetingFromStore = useMeetingsStore((s) => s.deleteMeeting);
 
-  const refreshAll = async () => {
+  const refreshAll = useCallback(async () => {
     const [m, t, n] = await Promise.all([
       window.floyd.meetings.get(meetingId),
       window.floyd.transcript.list(meetingId),
@@ -48,14 +49,14 @@ export function MeetingDetail({ meetingId }: Props) {
     setTranscript(t);
     setNotes(n);
     if (m?.templateId) setTemplateId(m.templateId);
-  };
+  }, [meetingId]);
 
   useEffect(() => {
     void refreshAll();
     setTab('notes');
     setEnhanceError(null);
     setExportMessage(null);
-  }, [meetingId]);
+  }, [meetingId, refreshAll]);
 
   useEffect(() => {
     const offPartial = window.floyd.transcript.onPartial((evt) => {
@@ -80,7 +81,7 @@ export function MeetingDetail({ meetingId }: Props) {
       offPartial();
       offFinal();
     };
-  }, [meetingId]);
+  }, [meetingId, refreshAll]);
 
   useEffect(() => {
     transcriptScrollRef.current?.scrollTo({
@@ -89,19 +90,30 @@ export function MeetingDetail({ meetingId }: Props) {
     });
   }, [transcript.length]);
 
+  const doExport = useCallback(async () => {
+    setExportMessage(null);
+    const res = await window.floyd.meetings.exportMarkdown(meetingId);
+    if (res.ok) setExportMessage(`Exported to ${res.path}`);
+    else setExportMessage(res.message ?? 'Export failed.');
+  }, [meetingId]);
+
   // Listen for menu shortcuts
   useEffect(() => {
     const off1 = window.floyd.menu.on('menu:export-meeting', () => void doExport());
     const off2 = window.floyd.menu.on('menu:delete-meeting', () => setConfirmDelete(true));
     const off3 = window.floyd.menu.on('menu:ask-oli', () => setTab('ask'));
     const off4 = window.floyd.menu.on('menu:save-notes', () => notesRef.current.flush());
+    const off5 = window.floyd.menu.on('menu:toggle-record', () => {
+      void recordToggleRef.current?.toggle();
+    });
     return () => {
       off1();
       off2();
       off3();
       off4();
+      off5();
     };
-  }, [meetingId]);
+  }, [meetingId, doExport]);
 
   const enhance = async () => {
     setEnhancing(true);
@@ -116,13 +128,6 @@ export function MeetingDetail({ meetingId }: Props) {
     } finally {
       setEnhancing(false);
     }
-  };
-
-  const doExport = async () => {
-    setExportMessage(null);
-    const res = await window.floyd.meetings.exportMarkdown(meetingId);
-    if (res.ok) setExportMessage(`Exported to ${res.path}`);
-    else setExportMessage(res.message ?? 'Export failed.');
   };
 
   const doDelete = async () => {
@@ -164,7 +169,11 @@ export function MeetingDetail({ meetingId }: Props) {
           >
             Delete
           </button>
-          <RecordButton meetingId={meeting.id} onStateChange={() => void refreshAll()} />
+          <RecordButton
+            meetingId={meeting.id}
+            onStateChange={() => void refreshAll()}
+            toggleRef={recordToggleRef}
+          />
         </div>
       </header>
 

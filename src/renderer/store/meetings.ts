@@ -28,7 +28,12 @@ export const useMeetingsStore = create<MeetingsStore>((set, get) => ({
     return m;
   },
   deleteMeeting: async (id) => {
-    await window.floyd.meetings.delete(id);
+    try {
+      await window.floyd.meetings.delete(id);
+    } catch (err) {
+      window.alert((err as Error).message ?? 'Failed to delete meeting');
+      return;
+    }
     if (get().selectedId === id) set({ selectedId: null });
     await get().refresh();
   }

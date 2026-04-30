@@ -1,5 +1,4 @@
 import { OliIcon } from './OliIcon';
-import { OliWordmark } from './OliWordmark';
 import { OliLogoHorizontal } from './OliLogoHorizontal';
 import { OliLogoStacked } from './OliLogoStacked';
 import { OliLogoMono } from './OliLogoMono';

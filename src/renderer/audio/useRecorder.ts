@@ -12,8 +12,13 @@ export function useRecorder(meetingId: string) {
     void handleRef.current?.stop();
   }, []);
 
+  const reset = useCallback(() => {
+    setState('idle');
+    setError(null);
+  }, []);
+
   const start = useCallback(async () => {
-    if (state !== 'idle') return;
+    if (state !== 'idle' && state !== 'error') return;
     setState('starting');
     setError(null);
     try {
@@ -94,5 +99,5 @@ export function useRecorder(meetingId: string) {
     }
   }, [state]);
 
-  return { state, error, start, stop };
+  return { state, error, start, stop, reset };
 }

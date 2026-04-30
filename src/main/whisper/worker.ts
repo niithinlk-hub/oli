@@ -1,6 +1,32 @@
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { app } from 'electron';
 import { settingsRepo, SETTINGS_KEYS } from '../db/settings';
+
+function bundledPath(...segments: string[]): string | null {
+  const rp = process.resourcesPath ?? '';
+  const candidates = [
+    join(app.getAppPath(), 'resources', ...segments),
+    join(rp, 'app.asar.unpacked', 'resources', ...segments),
+    join(rp, 'resources', ...segments),
+    join(__dirname, '../../resources', ...segments),
+    join(__dirname, '../../../resources', ...segments)
+  ];
+  for (const p of candidates) {
+    if (p && existsSync(p)) return p;
+  }
+  return null;
+}
+
+export function defaultWhisperBinary(): string | null {
+  return bundledPath('whisper-bin', 'whisper-cli.exe');
+}
+
+export function defaultWhisperModel(): string | null {
+  return bundledPath('whisper-models', 'ggml-base.en-q8_0.bin');
+}
 
 export interface WhisperSegment {
   startMs: number;
@@ -28,8 +54,10 @@ export class WhisperNotConfiguredError extends Error {
 }
 
 function resolveConfig(opts: WhisperRunOptions): { binary: string; model: string } {
-  const binary = opts.binaryPath ?? settingsRepo.get(SETTINGS_KEYS.whisperBinary);
-  const model = opts.modelPath ?? settingsRepo.get(SETTINGS_KEYS.whisperModel);
+  const binary =
+    opts.binaryPath ?? settingsRepo.get(SETTINGS_KEYS.whisperBinary) ?? defaultWhisperBinary();
+  const model =
+    opts.modelPath ?? settingsRepo.get(SETTINGS_KEYS.whisperModel) ?? defaultWhisperModel();
   if (!binary || !model) throw new WhisperNotConfiguredError();
   return { binary, model };
 }

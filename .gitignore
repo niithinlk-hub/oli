@@ -14,3 +14,14 @@ resources/whisper-models/*.bin
 src/main/**/*.js
 src/preload/**/*.js
 *.tsbuildinfo
+# Heavy bundled assets — kept out of git, present at build time via the
+# repo root (Oli logo.png, ggml-base.en-q8_0.bin, whisper-bin-x64/) or
+# downloaded by the user. resources/ folder is consumed by electron-builder
+# but its contents are not tracked.
+/Oli logo.png
+/ggml-base.en-q8_0.bin
+/whisper-bin-x64.zip
+/whisper-bin-x64/
+/resources/icons/oli.png
+/resources/whisper-bin/
+/resources/whisper-models/*.bin

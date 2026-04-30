@@ -1,7 +1,7 @@
 import { shell } from 'electron';
 import { createServer, type Server } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
-import { settingsRepo, SETTINGS_KEYS } from '../db/settings';
+import { settingsRepo } from '../db/settings';
 import { setSecret, getSecret, deleteSecret, hasSecret, SECRET_NAMES } from '../secrets';
 import { calendarEventsRepo } from './repo';
 

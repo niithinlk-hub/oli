@@ -1,5 +1,6 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { settingsRepo, SETTINGS_KEYS } from '../db/settings';
+import { defaultWhisperBinary, defaultWhisperModel } from '../whisper/worker';
 import type { AppSettings } from '@shared/types';
 
 export function registerSettingsIpc(): void {
@@ -7,6 +8,8 @@ export function registerSettingsIpc(): void {
     return {
       whisperBinaryPath: settingsRepo.get(SETTINGS_KEYS.whisperBinary),
       whisperModelPath: settingsRepo.get(SETTINGS_KEYS.whisperModel),
+      whisperBinaryDefault: defaultWhisperBinary(),
+      whisperModelDefault: defaultWhisperModel(),
       openAiKeyPresent: settingsRepo.get(SETTINGS_KEYS.openAiKeyPresent) === '1'
     };
   });
@@ -21,14 +24,17 @@ export function registerSettingsIpc(): void {
     else settingsRepo.delete(SETTINGS_KEYS.whisperModel);
   });
 
-  ipcMain.handle('settings:pickFile', async (_e, opts: { title: string; filters?: { name: string; extensions: string[] }[] }) => {
-    const win = BrowserWindow.getFocusedWindow();
-    const res = await dialog.showOpenDialog(win!, {
-      title: opts.title,
-      properties: ['openFile'],
-      filters: opts.filters
-    });
-    if (res.canceled || res.filePaths.length === 0) return null;
-    return res.filePaths[0];
-  });
+  ipcMain.handle(
+    'settings:pickFile',
+    async (_e, opts: { title: string; filters?: { name: string; extensions: string[] }[] }) => {
+      const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+      const res = await dialog.showOpenDialog(win ?? new BrowserWindow({ show: false }), {
+        title: opts.title,
+        properties: ['openFile'],
+        filters: opts.filters
+      });
+      if (res.canceled || res.filePaths.length === 0) return null;
+      return res.filePaths[0];
+    }
+  );
 }

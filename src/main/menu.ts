@@ -1,4 +1,4 @@
-import { app, Menu, BrowserWindow, type MenuItemConstructorOptions } from 'electron';
+import { Menu, BrowserWindow, type MenuItemConstructorOptions } from 'electron';
 
 function send(channel: string, ...args: unknown[]): void {
   const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
@@ -71,7 +71,8 @@ export function buildAppMenu(): void {
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
+        { label: 'Reload', accelerator: 'CmdOrCtrl+Shift+R', role: 'reload' },
+        { label: 'Force reload', accelerator: 'CmdOrCtrl+Shift+F5', role: 'forceReload' },
         { role: 'toggleDevTools' },
         { type: 'separator' },
         { role: 'resetZoom' },

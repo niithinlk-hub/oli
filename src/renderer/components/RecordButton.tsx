@@ -1,17 +1,23 @@
+import { useEffect } from 'react';
 import { useRecorder } from '../audio/useRecorder';
 
 interface Props {
   meetingId: string;
   onStateChange?: (recording: boolean) => void;
+  toggleRef?: { current: { toggle: () => Promise<void> } | null };
 }
 
-export function RecordButton({ meetingId, onStateChange }: Props) {
-  const { state, error, start, stop } = useRecorder(meetingId);
+export function RecordButton({ meetingId, onStateChange, toggleRef }: Props) {
+  const { state, error, start, stop, reset } = useRecorder(meetingId);
 
   const recording = state === 'recording' || state === 'starting';
   const busy = state === 'starting' || state === 'stopping';
 
   const handleClick = async () => {
+    if (state === 'error') {
+      reset();
+      return;
+    }
     if (recording) {
       await stop({ runFinalPass: true });
       onStateChange?.(false);
@@ -21,10 +27,22 @@ export function RecordButton({ meetingId, onStateChange }: Props) {
     }
   };
 
+  useEffect(() => {
+    if (!toggleRef) return;
+    toggleRef.current = { toggle: handleClick };
+    return () => {
+      if (toggleRef) toggleRef.current = null;
+    };
+  });
+
   return (
     <div className="flex items-center gap-3">
       {error && (
-        <span className="text-caption text-oli-coral max-w-[260px] truncate" title={error}>
+        <span
+          className="text-caption text-oli-coral max-w-[260px] truncate cursor-pointer"
+          title={`${error} — click to retry`}
+          onClick={reset}
+        >
           {error}
         </span>
       )}
@@ -48,9 +66,11 @@ export function RecordButton({ meetingId, onStateChange }: Props) {
           ? 'Starting…'
           : state === 'stopping'
             ? 'Stopping…'
-            : recording
-              ? 'Stop'
-              : 'Record'}
+            : state === 'error'
+              ? 'Retry'
+              : recording
+                ? 'Stop'
+                : 'Record'}
       </button>
     </div>
   );

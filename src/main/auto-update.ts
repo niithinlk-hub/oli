@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, dialog, type BrowserWindow } from 'electron';
 import { autoUpdater } from 'electron-updater';
 
 let mainWin: BrowserWindow | null = null;
@@ -20,15 +20,19 @@ export function initAutoUpdate(win: BrowserWindow): void {
   });
   autoUpdater.on('update-downloaded', async (info) => {
     mainWin?.webContents.send('app:update-downloaded', { version: info.version });
-    const choice = await dialog.showMessageBox(mainWin ?? new BrowserWindow(), {
-      type: 'info',
+    const parent = mainWin && !mainWin.isDestroyed() ? mainWin : undefined;
+    const opts = {
+      type: 'info' as const,
       title: 'Update ready',
       message: `Oli ${info.version} is ready to install.`,
       detail: 'The app will restart to apply the update. Any unsaved notes are auto-saved.',
       buttons: ['Restart now', 'Later'],
       defaultId: 0,
       cancelId: 1
-    });
+    };
+    const choice = parent
+      ? await dialog.showMessageBox(parent, opts)
+      : await dialog.showMessageBox(opts);
     if (choice.response === 0) {
       autoUpdater.quitAndInstall();
     }

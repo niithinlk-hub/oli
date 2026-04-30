@@ -9,7 +9,7 @@ import { registerCalendarIpc } from './ipc/calendar';
 import { registerExportIpc } from './ipc/export';
 import { seedBuiltInTemplates } from './llm/templates';
 import { startCalendarPoller, stopCalendarPoller } from './calendar/poller';
-import { initTray, destroyTray } from './tray';
+import { initTray, destroyTray, setTrayOpenHandler } from './tray';
 import { initAutoUpdate, checkForUpdatesNow } from './auto-update';
 import { buildAppMenu } from './menu';
 import { buildWindowIcon } from './window-icon';
@@ -64,31 +64,45 @@ app.whenReady().then(() => {
 
   buildAppMenu();
 
-  session.defaultSession.setDisplayMediaRequestHandler(
-    (_request, callback) => {
-      desktopCapturer
-        .getSources({ types: ['screen', 'window'] })
-        .then((sources) => {
-          const screen = sources.find((s) => s.id.startsWith('screen:')) ?? sources[0];
-          if (!screen) return callback({});
-          callback({ video: screen, audio: 'loopback' });
-        })
-        .catch((err) => {
-          console.error('display picker failed:', err);
-          callback({});
-        });
-    },
-    { useSystemPicker: true }
-  );
+  session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
+    desktopCapturer
+      .getSources({ types: ['screen'] })
+      .then((sources) => {
+        const screen = sources[0];
+        if (!screen) return callback({});
+        callback({ video: screen, audio: 'loopback' });
+      })
+      .catch((err) => {
+        console.error('display picker failed:', err);
+        callback({});
+      });
+  });
 
-  const win = createMainWindow();
+  let win = createMainWindow();
   initTray();
+  setTrayOpenHandler(() => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      win = createMainWindow();
+    }
+  });
   startCalendarPoller();
   initAutoUpdate(win);
 });
 
-app.on('window-all-closed', () => {
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createMainWindow();
+  }
+});
+
+app.on('before-quit', () => {
   stopCalendarPoller();
   destroyTray();
-  app.quit();
+});
+
+// On Windows we keep the process alive when the last window closes so the
+// tray icon and calendar poller keep working. Quit happens via the tray
+// menu's "Quit Oli" item or app menu File > Quit.
+app.on('window-all-closed', () => {
+  // intentionally empty
 });

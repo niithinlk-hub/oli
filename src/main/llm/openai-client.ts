@@ -110,12 +110,12 @@ ${transcript}
   return content;
 }
 
-export async function validateKey(apiKey: string): Promise<boolean> {
+export async function validateKey(apiKey: string): Promise<{ ok: boolean; message?: string }> {
   try {
     const client = new OpenAI({ apiKey });
     await client.models.list();
-    return true;
-  } catch {
-    return false;
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, message: (err as Error).message };
   }
 }

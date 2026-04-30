@@ -11,8 +11,16 @@ const POLL_INTERVAL_MS = 5 * 60_000;
 const LOOKAHEAD_MS = 12 * 60 * 60_000; // 12h
 const NOTIFY_LEAD_MS = 2 * 60_000;     // 2 min before
 
-const notified = new Set<string>();
+const notified = new Map<string, number>(); // externalId -> startsAt
+const PRUNE_AFTER_MS = 60 * 60_000; // drop entries 1h after they fired
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+function pruneNotified(): void {
+  const cutoff = Date.now() - PRUNE_AFTER_MS;
+  for (const [id, startsAt] of notified) {
+    if (startsAt < cutoff) notified.delete(id);
+  }
+}
 
 function broadcast<T>(channel: string, payload: T): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -42,13 +50,14 @@ async function pollOnce(): Promise<void> {
 }
 
 function scheduleNotifications(): void {
+  pruneNotified();
   const now = Date.now();
   const upcoming = calendarEventsRepo.upcoming(now, NOTIFY_LEAD_MS + 60_000);
   for (const ev of upcoming) {
     if (notified.has(ev.externalId)) continue;
     const fireAt = ev.startsAt - NOTIFY_LEAD_MS;
     const delay = Math.max(0, fireAt - now);
-    notified.add(ev.externalId);
+    notified.set(ev.externalId, ev.startsAt);
     setTimeout(() => fireMeetingNotification(ev), delay);
   }
 }

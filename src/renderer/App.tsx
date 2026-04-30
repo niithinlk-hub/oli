@@ -6,6 +6,7 @@ import { Brand } from './pages/Brand';
 import { Onboarding, shouldShowOnboarding } from './pages/Onboarding';
 import { UpcomingEvents } from './components/UpcomingEvents';
 import { SearchBar } from './components/SearchBar';
+import { ConfirmDialog } from './components/ConfirmDialog';
 import { useMeetingsStore } from './store/meetings';
 import { OliLogoStacked } from './components/brand/OliLogoStacked';
 
@@ -17,6 +18,12 @@ export default function App() {
   const [view, setView] = useState<View>('meeting');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [searchSignal, setSearchSignal] = useState(0);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [appVersion, setAppVersion] = useState<string>('');
+
+  useEffect(() => {
+    void window.floyd.app.version().then(setAppVersion);
+  }, []);
 
   useEffect(() => {
     setShowOnboarding(shouldShowOnboarding());
@@ -39,11 +46,13 @@ export default function App() {
     );
     const offSettings = window.floyd.menu.on('menu:settings', () => setView('settings'));
     const offBrand = window.floyd.menu.on('menu:brand', () => setView('brand'));
+    const offAbout = window.floyd.menu.on('menu:about', () => setAboutOpen(true));
     return () => {
       offNew();
       offSearch();
       offSettings();
       offBrand();
+      offAbout();
     };
   }, [createMeeting]);
 
@@ -84,6 +93,14 @@ export default function App() {
 
       <SearchBar openSignal={searchSignal} />
       {showOnboarding && <Onboarding onClose={() => setShowOnboarding(false)} />}
+      <ConfirmDialog
+        open={aboutOpen}
+        title="Oli"
+        message={`Local-first AI meeting memory for Windows.\n\nVersion ${appVersion || '0.1.1'}\nhttps://github.com/niithinlk-hub/oli`}
+        confirmLabel="OK"
+        onConfirm={() => setAboutOpen(false)}
+        onCancel={() => setAboutOpen(false)}
+      />
     </div>
   );
 }
