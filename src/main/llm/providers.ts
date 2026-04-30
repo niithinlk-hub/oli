@@ -283,6 +283,73 @@ Produce the requested output in clean GitHub-flavored markdown. Do not wrap the 
   return out;
 }
 
+export type EmailTone =
+  | 'professional'
+  | 'friendly'
+  | 'concise'
+  | 'persuasive'
+  | 'apologetic'
+  | 'assertive'
+  | 'neutral';
+
+export type EmailIntent =
+  | 'rephrase'
+  | 'reply'
+  | 'shorten'
+  | 'lengthen'
+  | 'fix-grammar'
+  | 'translate-en';
+
+interface RephraseEmailArgs {
+  originalText: string;
+  tone: EmailTone;
+  intent: EmailIntent;
+  contextNote?: string;
+}
+
+const EMAIL_SYSTEM = `You are an expert email writer. Rewrite the user's email or draft per the requested tone and intent. Rules:
+- Preserve original meaning and any hard facts (names, dates, numbers, amounts).
+- Output ONLY the rewritten email body — no preamble, no markdown fences, no commentary.
+- If a salutation or sign-off is present, keep an equivalent one. If absent, do not invent personal names.
+- Never add new commitments the user did not make.
+- Keep the language clean, natural, and human.`;
+
+function intentDirective(intent: EmailIntent): string {
+  switch (intent) {
+    case 'rephrase':
+      return 'Rephrase the email keeping the same length and intent.';
+    case 'reply':
+      return 'Write a reply to this email. Address the points raised.';
+    case 'shorten':
+      return 'Shorten the email to roughly half the length while preserving every key point.';
+    case 'lengthen':
+      return 'Expand the email with more detail, examples, and context where helpful.';
+    case 'fix-grammar':
+      return 'Fix grammar, spelling, and awkward phrasing only. Keep wording and length as close to original as possible.';
+    case 'translate-en':
+      return 'Translate the email to clear, natural English. Preserve formatting.';
+  }
+}
+
+export async function rephraseEmail(args: RephraseEmailArgs): Promise<string> {
+  const directive = intentDirective(args.intent);
+  const userMessage = `${directive}
+Tone: ${args.tone}.
+${args.contextNote ? `Extra context (do NOT include verbatim, just inform tone/content): ${args.contextNote}\n` : ''}
+Original email / draft:
+"""
+${args.originalText}
+"""`;
+
+  const out = await complete({
+    systemPrompt: EMAIL_SYSTEM,
+    userMessage,
+    temperature: 0.4
+  });
+  if (!out) throw new Error('LLM returned an empty response');
+  return out;
+}
+
 interface AskArgs {
   meetingTitle: string;
   transcript: string;

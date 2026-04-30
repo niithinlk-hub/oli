@@ -104,6 +104,20 @@ const api = {
       history: { role: 'user' | 'assistant'; content: string }[];
     }): Promise<{ ok: boolean; markdown?: string; message?: string }> =>
       ipcRenderer.invoke('llm:ask', args),
+    rephraseEmail: (args: {
+      originalText: string;
+      tone:
+        | 'professional'
+        | 'friendly'
+        | 'concise'
+        | 'persuasive'
+        | 'apologetic'
+        | 'assertive'
+        | 'neutral';
+      intent: 'rephrase' | 'reply' | 'shorten' | 'lengthen' | 'fix-grammar' | 'translate-en';
+      contextNote?: string;
+    }): Promise<{ ok: boolean; text?: string; message?: string }> =>
+      ipcRenderer.invoke('llm:rephraseEmail', args),
     listProviders: (): Promise<
       { id: string; label: string; configured: boolean; model: string }[]
     > => ipcRenderer.invoke('llm:listProviders'),

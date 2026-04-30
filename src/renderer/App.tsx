@@ -3,6 +3,8 @@ import { MeetingList } from './components/MeetingList';
 import { MeetingDetail } from './pages/MeetingDetail';
 import { Settings } from './pages/Settings';
 import { Brand } from './pages/Brand';
+import { Home } from './pages/Home';
+import { EmailRephraser } from './pages/EmailRephraser';
 import { Onboarding, shouldShowOnboarding } from './pages/Onboarding';
 import { UpcomingEvents } from './components/UpcomingEvents';
 import { SearchBar } from './components/SearchBar';
@@ -10,12 +12,12 @@ import { ConfirmDialog } from './components/ConfirmDialog';
 import { useMeetingsStore } from './store/meetings';
 import { OliLogoStacked } from './components/brand/OliLogoStacked';
 
-type View = 'meeting' | 'settings' | 'brand';
+type View = 'home' | 'meeting' | 'email' | 'settings' | 'brand';
 
 export default function App() {
   const selectedId = useMeetingsStore((s) => s.selectedId);
   const createMeeting = useMeetingsStore((s) => s.createMeeting);
-  const [view, setView] = useState<View>('meeting');
+  const [view, setView] = useState<View>('home');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [searchSignal, setSearchSignal] = useState(0);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -41,9 +43,10 @@ export default function App() {
       void createMeeting(title);
       setView('meeting');
     });
-    const offSearch = window.floyd.menu.on('menu:search', () =>
-      setSearchSignal((n) => n + 1)
-    );
+    const offSearch = window.floyd.menu.on('menu:search', () => {
+      setView('meeting');
+      setSearchSignal((n) => n + 1);
+    });
     const offSettings = window.floyd.menu.on('menu:settings', () => setView('settings'));
     const offBrand = window.floyd.menu.on('menu:brand', () => setView('brand'));
     const offAbout = window.floyd.menu.on('menu:about', () => setAboutOpen(true));
@@ -56,18 +59,51 @@ export default function App() {
     };
   }, [createMeeting]);
 
+  // Home + Email = full-window, no meeting sidebar
+  if (view === 'home') {
+    return (
+      <div className="h-screen bg-surface-cloud text-ink-primary">
+        <Home
+          onOpenMeeting={() => setView('meeting')}
+          onOpenEmail={() => setView('email')}
+          onOpenSettings={() => setView('settings')}
+          onOpenBrand={() => setView('brand')}
+        />
+        {showOnboarding && <Onboarding onClose={() => setShowOnboarding(false)} />}
+        <ConfirmDialog
+          open={aboutOpen}
+          title="Oli"
+          message={`Local-first AI meeting memory + email rephraser for Windows.\n\nVersion ${appVersion || '0.1.5'}\nhttps://github.com/niithinlk-hub/oli`}
+          confirmLabel="OK"
+          onConfirm={() => setAboutOpen(false)}
+          onCancel={() => setAboutOpen(false)}
+        />
+      </div>
+    );
+  }
+
+  if (view === 'email') {
+    return (
+      <div className="h-screen bg-surface-cloud text-ink-primary">
+        <EmailRephraser onHome={() => setView('home')} onOpenSettings={() => setView('settings')} />
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex bg-surface-cloud text-ink-primary">
       <MeetingList
+        onOpenHome={() => setView('home')}
         onOpenSettings={() => setView('settings')}
         onOpenBrand={() => setView('brand')}
         onOpenSearch={() => setSearchSignal((n) => n + 1)}
+        onOpenEmail={() => setView('email')}
         upcomingSlot={<UpcomingEvents />}
       />
       {view === 'settings' ? (
-        <Settings onClose={() => setView('meeting')} />
+        <Settings onClose={() => setView('home')} />
       ) : view === 'brand' ? (
-        <Brand onClose={() => setView('meeting')} />
+        <Brand onClose={() => setView('home')} />
       ) : selectedId ? (
         <MeetingDetail meetingId={selectedId} />
       ) : (
@@ -96,7 +132,7 @@ export default function App() {
       <ConfirmDialog
         open={aboutOpen}
         title="Oli"
-        message={`Local-first AI meeting memory for Windows.\n\nVersion ${appVersion || '0.1.1'}\nhttps://github.com/niithinlk-hub/oli`}
+        message={`Local-first AI meeting memory + email rephraser for Windows.\n\nVersion ${appVersion || '0.1.5'}\nhttps://github.com/niithinlk-hub/oli`}
         confirmLabel="OK"
         onConfirm={() => setAboutOpen(false)}
         onCancel={() => setAboutOpen(false)}

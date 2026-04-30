@@ -3,9 +3,11 @@ import { useMeetingsStore } from '../store/meetings';
 import { OliLogoHorizontal } from './brand/OliLogoHorizontal';
 
 interface Props {
+  onOpenHome?: () => void;
   onOpenSettings?: () => void;
   onOpenBrand?: () => void;
   onOpenSearch?: () => void;
+  onOpenEmail?: () => void;
   upcomingSlot?: React.ReactNode;
 }
 
@@ -19,7 +21,14 @@ function formatDate(ts: number): string {
   });
 }
 
-export function MeetingList({ onOpenSettings, onOpenBrand, onOpenSearch, upcomingSlot }: Props) {
+export function MeetingList({
+  onOpenHome,
+  onOpenSettings,
+  onOpenBrand,
+  onOpenSearch,
+  onOpenEmail,
+  upcomingSlot
+}: Props) {
   const { meetings, selectedId, refresh, select, createMeeting } = useMeetingsStore();
 
   useEffect(() => {
@@ -35,9 +44,9 @@ export function MeetingList({ onOpenSettings, onOpenBrand, onOpenSearch, upcomin
     <aside className="w-80 shrink-0 border-r border-line bg-white flex flex-col">
       <div className="titlebar-drag h-14 flex items-center justify-between px-4 border-b border-line">
         <button
-          onClick={onOpenBrand}
+          onClick={onOpenHome ?? onOpenBrand}
           className="rounded-md hover:bg-surface-ice p-1 -m-1 transition"
-          title="Brand"
+          title={onOpenHome ? 'Home' : 'Brand'}
         >
           <OliLogoHorizontal iconSize={28} wordmarkSize={22} />
         </button>
@@ -53,6 +62,29 @@ export function MeetingList({ onOpenSettings, onOpenBrand, onOpenSearch, upcomin
           )}
         </div>
       </div>
+
+      {(onOpenHome || onOpenEmail) && (
+        <div className="px-4 py-2 border-b border-line flex items-center gap-1.5 bg-white">
+          {onOpenHome && (
+            <button
+              onClick={onOpenHome}
+              className="flex-1 text-caption px-2 py-1.5 rounded-md text-ink-secondary hover:bg-surface-cloud"
+              title="Home"
+            >
+              ⌂ Home
+            </button>
+          )}
+          {onOpenEmail && (
+            <button
+              onClick={onOpenEmail}
+              className="flex-1 text-caption px-2 py-1.5 rounded-md text-ink-secondary hover:bg-surface-cloud"
+              title="Email rephraser"
+            >
+              ✉ Email rephraser
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="px-4 py-3 border-b border-line space-y-2">
         <button

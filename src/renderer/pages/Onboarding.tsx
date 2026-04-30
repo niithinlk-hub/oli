@@ -175,8 +175,9 @@ function DoneStep() {
       <OliIcon size={88} />
       <h2 className="text-h2 font-display mt-4">You&rsquo;re set.</h2>
       <p className="text-body text-ink-secondary mt-2 max-w-md mx-auto">
-        Hit <span className="font-medium text-ink-primary">+ New meeting</span> on the left, click Record,
-        and Oli will start listening. Ask Oli to enhance your notes any time.
+        Two tools, one Oli. Pick <span className="font-medium text-ink-primary">Meeting recorder</span> to
+        capture and transcribe, or <span className="font-medium text-ink-primary">Email rephraser</span> to
+        rewrite drafts. Switch any time from the sidebar.
       </p>
     </div>
   );

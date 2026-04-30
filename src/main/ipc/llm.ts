@@ -3,6 +3,7 @@ import { meetingsRepo, notesRepo, transcriptRepo } from '../db/repo';
 import {
   enhance,
   ask,
+  rephraseEmail,
   validateKey,
   setProviderKey,
   deleteProviderKey,
@@ -15,7 +16,9 @@ import {
   setModelOverride,
   PROVIDERS,
   LlmNotConfiguredError,
-  type ProviderId
+  type ProviderId,
+  type EmailTone,
+  type EmailIntent
 } from '../llm/providers';
 import { getTemplate, listTemplates } from '../llm/templates';
 import { htmlToMarkdown } from '../llm/html-to-markdown';
@@ -90,6 +93,29 @@ export function registerLlmIpc(): void {
         if (err instanceof LlmNotConfiguredError) {
           return { ok: false, message: err.message };
         }
+        return { ok: false, message: (err as Error).message };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    'llm:rephraseEmail',
+    async (
+      _e,
+      args: { originalText: string; tone: EmailTone; intent: EmailIntent; contextNote?: string }
+    ) => {
+      try {
+        const text = (args.originalText ?? '').trim();
+        if (!text) return { ok: false, message: 'Please paste an email or draft first.' };
+        const out = await rephraseEmail({
+          originalText: text,
+          tone: args.tone,
+          intent: args.intent,
+          contextNote: args.contextNote
+        });
+        return { ok: true, text: out };
+      } catch (err) {
+        if (err instanceof LlmNotConfiguredError) return { ok: false, message: err.message };
         return { ok: false, message: (err as Error).message };
       }
     }
