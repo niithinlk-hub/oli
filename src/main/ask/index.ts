@@ -4,8 +4,7 @@
  * Flow:
  *  1. Embed user query, top-k=8 semantic search via `searchEmbeddings`.
  *  2. Inject hits as numbered context into a chat prompt.
- *  3. Call active LLM provider's `complete()` with citation-encouraging
- *     system prompt.
+ *  3. Call `chat()` with citation-encouraging system prompt.
  *  4. Persist conversation + assistant message + citations.
  *
  * Citations are stored as JSON arrays of `{ meetingId, segmentId? }` so the
@@ -14,11 +13,7 @@
 import { randomUUID } from 'node:crypto';
 import { initDb } from '../db/repo';
 import { searchEmbeddings, type SearchHit } from '../embeddings';
-import {
-  ask as llmAsk,
-  type ChatTurn,
-  LlmNotConfiguredError
-} from '../llm/providers';
+import { chat, LlmNotConfiguredError, type ChatTurn } from '../llm/providers';
 
 export interface AskCitation {
   meetingId: string;
@@ -135,7 +130,7 @@ export const askRepo = {
   }
 };
 
-const ASK_SYSTEM = `You are Oli, the user's AI meeting memory. Answer using ONLY the provided meeting context. Cite sources inline as [1], [2], … matching the numbered context entries. If the answer is not in the context, say so plainly. Be concise. Use GitHub-flavored markdown.`;
+const ASK_SYSTEM = `You are Oli, the user's AI meeting memory. Answer using ONLY the provided meeting context. Cite sources inline as [1], [2], … matching the numbered context entries — every factual claim should carry a citation. If the answer is not in the context, say so plainly. Be concise. Use GitHub-flavored markdown.`;
 
 export async function askMeetings(
   conversationId: string,
@@ -166,28 +161,21 @@ export async function askMeetings(
     .filter((m) => m.role !== 'user' || m.content !== question)
     .map<ChatTurn>((m) => ({ role: m.role, content: m.content }));
 
-  // Reuse the existing ask() helper to dispatch across provider models.
-  const answer = await llmAsk({
-    meetingTitle: 'Multi-meeting',
-    transcript: '',
-    userNotesMarkdown: '',
-    enhancedMarkdown: null,
-    history,
-    question: userMessage
-  }).catch((err) => {
+  let answer: string;
+  try {
+    answer = await chat({
+      systemPrompt: ASK_SYSTEM,
+      userMessage,
+      history,
+      temperature: 0.2
+    });
+  } catch (err) {
     if (err instanceof LlmNotConfiguredError) {
-      return `_(${err.message})_`;
+      answer = `_${err.message}_`;
+    } else {
+      throw err;
     }
-    throw err;
-  });
-
-  // Keep ASK_SYSTEM injected by repurposing the prompt above through the
-  // same dispatcher: cheap; we re-prefix the system intent into the user
-  // payload since `ask()` has its own system prompt. This pragmatic shim
-  // works while the dispatcher remains opaque.
-  const hinted = answer.startsWith('_(')
-    ? answer
-    : `${answer}`;
+  }
 
   const citations: AskCitation[] = hits.map((h) => ({
     meetingId: h.meetingId,
@@ -196,8 +184,6 @@ export async function askMeetings(
     segmentStartMs: h.segmentStartMs,
     score: h.score
   }));
-  const msg = askRepo.appendMessage(conversationId, 'assistant', hinted, citations);
-  // Use the system prompt — exported for tests/preview.
-  void ASK_SYSTEM;
+  const msg = askRepo.appendMessage(conversationId, 'assistant', answer, citations);
   return { message: msg, hits };
 }

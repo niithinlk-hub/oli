@@ -72,12 +72,13 @@ export default function App() {
   }, [createMeeting]);
 
   // Track active recording state for the mini-window auto-spawn.
+  // Subscribe to meetings store — any meeting with status='recording'
+  // means the pipeline is active, regardless of whether mic+loopback are
+  // both muted.
   const isRecordingRef = useRef(false);
   useEffect(() => {
-    // Whenever amplitude bars are non-zero we infer active recording.
-    // Cheap-and-cheerful: drives mini open/close while window is hidden.
-    const unsub = useAmplitude.subscribe((s) => {
-      isRecordingRef.current = s.micRms > 0 || s.loopbackRms > 0;
+    const unsub = useMeetingsStore.subscribe((s) => {
+      isRecordingRef.current = s.meetings.some((m) => m.status === 'recording');
     });
     return () => unsub();
   }, []);

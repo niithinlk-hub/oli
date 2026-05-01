@@ -18,6 +18,7 @@ import { decisionsRepo, actionItemsRepo } from '../db/structured';
 import { embedBatch, embedDimensions, embedModelName } from '../llm/providers';
 import type { EmbedProvider } from '../llm/providers';
 import { settingsRepo } from '../db/settings';
+import { htmlToMarkdown } from '../llm/html-to-markdown';
 
 export const EMBED_KEYS = {
   provider: 'embeddings.provider'
@@ -109,10 +110,15 @@ export async function reindexMeeting(meetingId: string): Promise<{ count: number
     items.push({ kind: 'transcript_chunk', content: c.content, segmentId: c.segmentId });
   }
   if (note?.enhancedMarkdown) {
+    // enhancedMarkdown is already MD (LLM output) — no conversion needed.
     items.push({ kind: 'summary', content: note.enhancedMarkdown, segmentId: null });
   }
   if (note?.rawMarkdown) {
-    items.push({ kind: 'note', content: note.rawMarkdown, segmentId: null });
+    // rawMarkdown column actually stores TipTap-emitted HTML (legacy column
+    // name). Convert to MD before embedding so retrieval scores against
+    // human-readable text, not tag soup.
+    const md = htmlToMarkdown(note.rawMarkdown).trim();
+    if (md) items.push({ kind: 'note', content: md, segmentId: null });
   }
   for (const a of actions) {
     items.push({
