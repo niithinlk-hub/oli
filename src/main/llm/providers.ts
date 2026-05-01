@@ -176,6 +176,15 @@ export interface CompleteArgs {
   temperature?: number;
 }
 
+/**
+ * Public raw chat helper. Same shape as `complete()` but exported so other
+ * modules (Ask my meetings, structured retry) can drive the dispatcher with
+ * their own system prompt + history without going through enhance/ask.
+ */
+export async function chat(args: CompleteArgs): Promise<string> {
+  return complete(args);
+}
+
 async function complete(args: CompleteArgs): Promise<string> {
   const provider = getActiveProvider();
   const key = await getProviderKey(provider);

@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Oli — rephrase & reply",
+  "version": "1.4.0",
+  "description": "Inline Oli rephrase + reply for Gmail and Outlook Web. Talks to the Oli desktop app on 127.0.0.1.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "*://mail.google.com/*",
+    "*://outlook.office.com/*",
+    "*://outlook.live.com/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Oli"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://mail.google.com/*",
+        "*://outlook.office.com/*",
+        "*://outlook.live.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

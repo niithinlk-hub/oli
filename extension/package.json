@@ -1,0 +1,9 @@
+{
+  "name": "oli-extension",
+  "version": "1.4.0",
+  "description": "Oli browser companion — rephrase / reply with Oli inside Gmail and Outlook Web",
+  "private": true,
+  "scripts": {
+    "build": "echo \"Build with: zip -r oli-extension.zip manifest.json popup.html popup.js content.js\""
+  }
+}

@@ -289,6 +289,19 @@ const api = {
       return () => ipcRenderer.removeListener('calendar:auto-record-start', handler);
     }
   },
+  extension: {
+    status: (): Promise<{ port: number; tokens: { id: string; label: string; createdAt: number }[] }> =>
+      ipcRenderer.invoke('ext:status'),
+    pair: (
+      label?: string
+    ): Promise<{ code: string; port: number; expiresInMs: number }> =>
+      ipcRenderer.invoke('ext:pair', label ?? 'Extension'),
+    revoke: (id: string): Promise<void> => ipcRenderer.invoke('ext:revoke', id)
+  },
+  telemetry: {
+    get: (): Promise<{ optIn: boolean }> => ipcRenderer.invoke('telemetry:get'),
+    set: (optIn: boolean): Promise<void> => ipcRenderer.invoke('telemetry:set', optIn)
+  },
   ai: {
     diar: {
       status: (): Promise<{ provider: 'cloud-assemblyai' | 'local-pyannote'; keyConfigured: boolean }> =>
