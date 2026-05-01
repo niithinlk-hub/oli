@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import { MeetingList } from './components/MeetingList';
+import { useAmplitude } from './store/amplitude';
 import { MeetingDetail } from './pages/MeetingDetail';
 import { Settings } from './pages/Settings';
 import { Brand } from './pages/Brand';
@@ -67,6 +68,40 @@ export default function App() {
       offAbout();
     };
   }, [createMeeting]);
+
+  // Track active recording state for the mini-window auto-spawn.
+  const isRecordingRef = useRef(false);
+  useEffect(() => {
+    // Whenever amplitude bars are non-zero we infer active recording.
+    // Cheap-and-cheerful: drives mini open/close while window is hidden.
+    const unsub = useAmplitude.subscribe((s) => {
+      isRecordingRef.current = s.micRms > 0 || s.loopbackRms > 0;
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const off = window.floyd.mini.onRequestOpenOnHide(() => {
+      void window.floyd.mini.openIfRecording(isRecordingRef.current);
+    });
+    return () => {
+      off();
+    };
+  }, []);
+
+  // Forward amplitude bars to mini window (cheap, only when mini is open).
+  useEffect(() => {
+    let lastSent = 0;
+    const unsub = useAmplitude.subscribe((s) => {
+      const now = Date.now();
+      // Throttle to ~30fps to avoid IPC flooding.
+      if (now - lastSent < 33) return;
+      lastSent = now;
+      const bars = s.micBars.map((m, i) => Math.max(m, s.loopbackBars[i] ?? 0));
+      window.floyd.mini.sendAmplitude({ mic: s.micRms, loopback: s.loopbackRms, bars });
+    });
+    return () => unsub();
+  }, []);
 
   // Keyboard shortcuts: Ctrl+K (palette), [ (sidebar rail toggle)
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { startCapture, startMicCapture, type CaptureHandle } from './capture';
+import { useAmplitude } from '../store/amplitude';
 
 export type RecorderState = 'idle' | 'starting' | 'recording' | 'stopping' | 'error';
 
@@ -28,6 +29,9 @@ export function useRecorder(meetingId: string) {
         channels: 1
       });
 
+      // Snapshot store API once — getState avoids re-subscribing inside callbacks.
+      const amp = useAmplitude.getState();
+
       let handle: CaptureHandle;
       const nativeAvailable = await window.floyd.recording.nativeAvailable();
       if (nativeAvailable) {
@@ -35,7 +39,10 @@ export function useRecorder(meetingId: string) {
           await window.floyd.recording.startNative(meetingId);
           const micHandle = await startMicCapture({
             onChunk: (samples) => {
-              void window.floyd.recording.micChunk(meetingId, samples);
+              amp.pushMic(samples);
+              if (!useAmplitude.getState().micMuted) {
+                void window.floyd.recording.micChunk(meetingId, samples);
+              }
             },
             onError: (err) => {
               setError(err.message);
@@ -46,6 +53,7 @@ export function useRecorder(meetingId: string) {
             stop: async () => {
               await micHandle.stop();
               await window.floyd.recording.stopNative(meetingId);
+              useAmplitude.getState().reset();
             }
           };
         } catch (err) {
@@ -53,7 +61,12 @@ export function useRecorder(meetingId: string) {
           await window.floyd.recording.stopNative(meetingId).catch(() => undefined);
           handle = await startCapture({
             onChunk: (samples) => {
-              void window.floyd.recording.chunk(meetingId, samples);
+              // Display-media path mixes mic+loopback before delivering, so
+              // we only have one stream to visualize. Push it as loopback.
+              amp.pushLoopback(samples);
+              if (!useAmplitude.getState().loopbackMuted) {
+                void window.floyd.recording.chunk(meetingId, samples);
+              }
             },
             onError: (captureErr) => {
               setError(captureErr.message);
@@ -64,7 +77,10 @@ export function useRecorder(meetingId: string) {
       } else {
         handle = await startCapture({
           onChunk: (samples) => {
-            void window.floyd.recording.chunk(meetingId, samples);
+            amp.pushLoopback(samples);
+            if (!useAmplitude.getState().loopbackMuted) {
+              void window.floyd.recording.chunk(meetingId, samples);
+            }
           },
           onError: (err) => {
             setError(err.message);
@@ -92,6 +108,7 @@ export function useRecorder(meetingId: string) {
       await handleRef.current?.stop();
       handleRef.current = null;
       await window.floyd.recording.stop({ runFinalPass: opts.runFinalPass ?? true });
+      useAmplitude.getState().reset();
       setState('idle');
     } catch (err) {
       setError((err as Error).message);

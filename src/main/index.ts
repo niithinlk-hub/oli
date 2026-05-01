@@ -1,10 +1,23 @@
-import { app, BrowserWindow, ipcMain, shell, session, desktopCapturer } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  shell,
+  session,
+  desktopCapturer,
+  globalShortcut,
+  protocol,
+  net
+} from 'electron';
+import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { initDb } from './db/repo';
 import { registerMeetingIpc } from './ipc/meetings';
 import { registerRecordingIpc } from './ipc/recording';
 import { registerSettingsIpc } from './ipc/settings';
+import { meetingsRepo } from './db/repo';
 import { registerLlmIpc } from './ipc/llm';
+import { closeMiniRecorder, registerMiniRecorderIpc } from './windows/miniRecorder';
 import { registerSttIpc } from './ipc/stt';
 import { registerCalendarIpc } from './ipc/calendar';
 import { registerExportIpc } from './ipc/export';
@@ -16,6 +29,12 @@ import { buildAppMenu } from './menu';
 import { buildWindowIcon } from './window-icon';
 
 const isDev = !app.isPackaged;
+
+// Custom audio protocol so the renderer can play meeting WAVs without
+// loosening webSecurity. URL form: `oli-audio://{meetingId}`.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'oli-audio', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }
+]);
 
 function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -36,6 +55,18 @@ function createMainWindow(): BrowserWindow {
 
   win.on('ready-to-show', () => win.show());
 
+  // Auto-open mini recorder when main window is hidden/minimized while
+  // recording. We don't track recording state in main directly — we ask the
+  // renderer via IPC. The renderer responds asynchronously via the mini
+  // window itself if recording was active.
+  const maybeOpenMini = () => {
+    win.webContents.send('app:request-mini-on-hide');
+  };
+  win.on('minimize', maybeOpenMini);
+  win.on('hide', maybeOpenMini);
+  win.on('show', () => closeMiniRecorder());
+  win.on('restore', () => closeMiniRecorder());
+
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
@@ -54,11 +85,26 @@ app.whenReady().then(() => {
   initDb();
   seedBuiltInTemplates();
 
+  protocol.handle('oli-audio', async (req) => {
+    try {
+      const url = new URL(req.url);
+      // host carries the meeting id (URL parser lowercases hostnames, but our
+      // ids are already lowercase UUIDs so this is fine).
+      const meetingId = url.hostname;
+      const m = meetingsRepo.get(meetingId);
+      if (!m?.audioPath) return new Response('not found', { status: 404 });
+      return net.fetch(pathToFileURL(m.audioPath).toString());
+    } catch (err) {
+      return new Response((err as Error).message, { status: 500 });
+    }
+  });
+
   registerMeetingIpc();
   registerRecordingIpc();
   registerSettingsIpc();
   registerLlmIpc();
   registerSttIpc();
+  registerMiniRecorderIpc();
   registerCalendarIpc();
   registerExportIpc();
   ipcMain.handle('app:version', () => app.getVersion());
@@ -89,6 +135,22 @@ app.whenReady().then(() => {
   });
   startCalendarPoller();
   initAutoUpdate(win);
+
+  // Global record toggle hotkey. Sends `menu:toggle-record` to whichever
+  // window is focused — main window subscribes; mini-recorder window will too.
+  // TODO(phase-1.8): make rebindable via Settings > Keyboard.
+  const HOTKEY = 'CommandOrControl+Shift+R';
+  const registered = globalShortcut.register(HOTKEY, () => {
+    const focused = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    if (!focused) {
+      const w = createMainWindow();
+      w.once('ready-to-show', () => w.webContents.send('menu:toggle-record'));
+      return;
+    }
+    if (!focused.isVisible()) focused.show();
+    focused.webContents.send('menu:toggle-record');
+  });
+  if (!registered) console.warn(`globalShortcut.register('${HOTKEY}') failed`);
 });
 
 app.on('activate', () => {
@@ -100,6 +162,7 @@ app.on('activate', () => {
 app.on('before-quit', () => {
   stopCalendarPoller();
   destroyTray();
+  globalShortcut.unregisterAll();
 });
 
 // On Windows we keep the process alive when the last window closes so the

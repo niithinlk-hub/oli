@@ -1,5 +1,6 @@
-import { OliLogoStacked } from '../components/brand/OliLogoStacked';
+import { useEffect, useState } from 'react';
 import { OliIcon } from '../components/brand/OliIcon';
+import { useMeetingsStore } from '../store/meetings';
 
 interface Props {
   onOpenMeeting: () => void;
@@ -8,7 +9,45 @@ interface Props {
   onOpenBrand: () => void;
 }
 
+function timeOfDayGreeting(d = new Date()): string {
+  const h = d.getHours();
+  if (h < 5) return 'Up late';
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  if (h < 21) return 'Good evening';
+  return 'Late night';
+}
+
+function todayStr(d = new Date()): string {
+  return d.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric'
+  });
+}
+
 export function Home({ onOpenMeeting, onOpenEmail, onOpenSettings, onOpenBrand }: Props) {
+  const meetings = useMeetingsStore((s) => s.meetings);
+  const refresh = useMeetingsStore((s) => s.refresh);
+  const select = useMeetingsStore((s) => s.select);
+  const createMeeting = useMeetingsStore((s) => s.createMeeting);
+  const [userName] = useState<string>('there');
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const recent = meetings.slice(0, 4);
+
+  const startTestRecording = async () => {
+    const m = await createMeeting('Test recording (auto-delete)');
+    select(m.id);
+    onOpenMeeting();
+    // TODO(phase-1.9): wire 30s auto-stop + auto-delete-unless-saved guard.
+    // For now lands the user in MeetingDetail with a flagged meeting; they
+    // can record manually and decide to keep or delete.
+  };
+
   return (
     <div
       className="h-screen w-full flex flex-col"
@@ -31,18 +70,31 @@ export function Home({ onOpenMeeting, onOpenEmail, onOpenSettings, onOpenBrand }
         </button>
       </header>
 
-      <main className="flex-1 flex flex-col items-center justify-center px-6">
-        <OliLogoStacked iconSize={72} wordmarkSize={36} />
-        <h1 className="text-h2 font-display mt-6">What do you want to do?</h1>
-        <p className="text-body text-ink-secondary mt-1 max-w-lg text-center">
-          Oli is your AI sidekick — for meetings <em>and</em> email. Pick a tool to get started.
-        </p>
+      <main className="flex-1 flex flex-col items-center justify-center px-6 overflow-y-auto py-10">
+        <div className="text-center max-w-3xl">
+          <p className="text-caption uppercase tracking-wider text-ink-muted">{todayStr()}</p>
+          <h1
+            className="font-display mt-2 leading-tight"
+            style={{
+              fontSize: '3.25rem',
+              backgroundImage: 'var(--oli-gradient-primary)',
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              color: 'transparent'
+            }}
+          >
+            {timeOfDayGreeting()}, {userName}.
+          </h1>
+          <p className="text-body text-ink-secondary mt-3">
+            What do you want to do?
+          </p>
+        </div>
 
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-5 w-full max-w-3xl">
           <TabCard
             title="Meeting recorder"
             tagline="Record · transcribe · enhance"
-            body="Capture any meeting locally. Whisper transcribes on-device, then Oli turns rough notes into clean summaries, decisions, and actions."
+            body="Capture any meeting locally. Whisper transcribes — Groq cloud is fastest, local whisper.cpp is private. Then Oli turns rough notes into clean summaries, decisions, actions."
             cta="Start a meeting"
             gradient="var(--oli-gradient-primary)"
             onClick={onOpenMeeting}
@@ -50,16 +102,43 @@ export function Home({ onOpenMeeting, onOpenEmail, onOpenSettings, onOpenBrand }
           <TabCard
             title="Email rephraser"
             tagline="Rewrite · reply · polish"
-            body="Paste a draft. Pick a tone — professional, friendly, concise. Oli rewrites it cleanly, fixes grammar, or drafts a reply. Nothing leaves your machine without your AI key."
+            body="Paste a draft. Pick a tone — professional, friendly, concise. Oli rewrites cleanly, fixes grammar, or drafts a reply. Ctrl+Enter to run."
             cta="Open rephraser"
             gradient="var(--oli-gradient-memory)"
             onClick={onOpenEmail}
           />
         </div>
 
-        <p className="text-caption text-ink-muted mt-8">
-          Same brain, two tools. Switch any time from the sidebar.
-        </p>
+        {/* Recent or empty-state */}
+        {recent.length === 0 ? (
+          <div className="mt-10 w-full max-w-3xl">
+            <EmptyState onStartTest={startTestRecording} />
+          </div>
+        ) : (
+          <div className="mt-10 w-full max-w-3xl">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-caption uppercase tracking-wider text-ink-muted">Recent</p>
+              <kbd className="text-caption text-ink-muted font-mono">Ctrl+K to search</kbd>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {recent.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => {
+                    select(m.id);
+                    onOpenMeeting();
+                  }}
+                  className="text-left rounded-card bg-white border border-line shadow-card hover:shadow-floating transition p-4"
+                >
+                  <p className="text-body-sm font-semibold truncate">{m.title}</p>
+                  <p className="text-caption text-ink-muted mt-1">
+                    {new Date(m.startedAt).toLocaleString()} · {m.status}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
@@ -98,5 +177,45 @@ function TabCard({
         </span>
       </div>
     </button>
+  );
+}
+
+function EmptyState({ onStartTest }: { onStartTest: () => void }) {
+  return (
+    <div className="rounded-card border border-line bg-white p-8 shadow-card text-center">
+      <div className="flex items-center justify-center gap-2 mb-4">
+        <span
+          className="h-6 w-6 rounded-full"
+          style={{ background: 'var(--oli-gradient-primary)' }}
+        />
+        <span
+          className="h-3 w-3 rounded-full"
+          style={{ background: 'var(--oli-gradient-memory)' }}
+        />
+        <span
+          className="h-4 w-4 rounded-full"
+          style={{ background: 'var(--oli-gradient-insight)' }}
+        />
+        <OliIcon size={28} />
+        <span
+          className="h-3 w-3 rounded-full bg-oli-coral"
+        />
+        <span
+          className="h-5 w-5 rounded-full bg-oli-teal"
+        />
+      </div>
+      <h3 className="text-h3 font-display">No meetings yet</h3>
+      <p className="text-body-sm text-ink-secondary mt-2 max-w-md mx-auto">
+        Run a quick 30-second test — Oli will record, transcribe, and enhance, so you can see the
+        full pipeline before your next real meeting.
+      </p>
+      <button
+        onClick={onStartTest}
+        className="mt-5 px-5 py-2.5 rounded-button text-btn text-white shadow-floating"
+        style={{ background: 'var(--oli-gradient-primary)' }}
+      >
+        Record a 30-second test
+      </button>
+    </div>
   );
 }
