@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Oli</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        margin: 0;
+        padding: 16px;
+        width: 320px;
+        background: #f8fafc;
+        color: #0a1828;
+      }
+      h1 {
+        font-size: 16px;
+        margin: 0 0 8px;
+        background: linear-gradient(135deg, #2563eb, #14b8a6);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .row { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+      input, button, select {
+        padding: 6px 10px;
+        font: inherit;
+        border-radius: 6px;
+        border: 1px solid #e1e8f1;
+        background: white;
+      }
+      button {
+        cursor: pointer;
+      }
+      button.primary {
+        background: linear-gradient(135deg, #2563eb, #14b8a6);
+        color: white;
+        border: none;
+      }
+      .muted { color: #6b7785; font-size: 12px; }
+      .ok { color: #14b8a6; font-weight: 600; }
+      .err { color: #ff6b6b; }
+      #status { font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>Oli</h1>
+    <p id="status" class="muted">Checking connection…</p>
+
+    <div id="pair" style="display:none">
+      <p class="muted">Open Settings → Browser extension in the Oli desktop app and click <strong>Pair an extension</strong>. Paste the 6-character code below.</p>
+      <div class="row">
+        <input id="code" placeholder="ABC123" maxlength="6" style="flex:1; text-transform:uppercase" />
+        <button class="primary" id="pairBtn">Pair</button>
+      </div>
+      <p class="muted">Port: <span id="port">7421</span></p>
+    </div>
+
+    <div id="ready" style="display:none">
+      <p class="ok" id="readyMsg">Paired ✓</p>
+      <p class="muted">Open Gmail or Outlook Web. Look for the small "✦ Oli" button in the compose toolbar.</p>
+      <button id="forget">Forget pairing</button>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

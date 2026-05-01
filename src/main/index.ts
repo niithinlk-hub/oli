@@ -20,8 +20,10 @@ import { registerLlmIpc } from './ipc/llm';
 import { closeMiniRecorder, registerMiniRecorderIpc } from './windows/miniRecorder';
 import { registerSttIpc } from './ipc/stt';
 import { registerAiIpc } from './ipc/ai';
+import { registerExtensionIpc } from './ipc/extension';
 import { registerCalendarIpc } from './ipc/calendar';
 import { registerExportIpc } from './ipc/export';
+import { startLocalServer, stopLocalServer } from './server/localServer';
 import { seedBuiltInTemplates } from './llm/templates';
 import { startCalendarPoller, stopCalendarPoller } from './calendar/poller';
 import { startAutoRecordScheduler, stopAutoRecordScheduler } from './calendar/autoRecord';
@@ -108,7 +110,11 @@ app.whenReady().then(() => {
   registerLlmIpc();
   registerSttIpc();
   registerAiIpc();
+  registerExtensionIpc();
   registerMiniRecorderIpc();
+  void startLocalServer().catch((err) =>
+    console.warn('local server failed to start:', (err as Error).message)
+  );
   registerCalendarIpc();
   registerExportIpc();
   ipcMain.handle('app:version', () => app.getVersion());
@@ -168,6 +174,7 @@ app.on('before-quit', () => {
   stopCalendarPoller();
   stopAutoRecordScheduler();
   void stopFolderWatchers();
+  void stopLocalServer();
   destroyTray();
   globalShortcut.unregisterAll();
 });

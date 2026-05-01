@@ -6,6 +6,8 @@ import { AiSection } from '../components/AiSection';
 import { SttProviderSection } from '../components/SttProviderSection';
 import { WhisperModelSection } from '../components/WhisperModelSection';
 import { CalendarSubscriptionsSection } from '../components/CalendarSubscriptionsSection';
+import { ExtensionsSection } from '../components/ExtensionsSection';
+import { PrivacySection } from '../components/PrivacySection';
 
 export function Settings({ onClose }: { onClose: () => void }) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -143,6 +145,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <AiSection />
         <WhisperModelSection />
         <CalendarSubscriptionsSection />
+        <ExtensionsSection />
+        <PrivacySection />
 
         <Section
           title="Google Calendar"

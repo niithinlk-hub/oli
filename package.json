@@ -1,6 +1,6 @@
 {
   "name": "oli",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Oli — local-first AI meeting memory for Windows.",
   "main": "out/main/index.js",
   "author": "hussa",
@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
+    "@fastify/cors": "^11.2.0",
     "@google/generative-ai": "^0.24.1",
     "@tiptap/extension-placeholder": "^2.10.3",
     "@tiptap/pm": "^2.10.3",
@@ -31,6 +32,7 @@
     "cmdk": "^1.1.1",
     "dompurify": "^3.2.3",
     "electron-updater": "^6.3.9",
+    "fastify": "^5.8.5",
     "groq-sdk": "^1.1.2",
     "marked": "^15.0.4",
     "node-ical": "^0.20.1",

@@ -1,11 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { OliLogoStacked } from '../components/brand/OliLogoStacked';
 import { OliIcon } from '../components/brand/OliIcon';
 import { AiProviderSection } from '../components/AiProviderSection';
 import { SttProviderSection } from '../components/SttProviderSection';
-import { WhisperModelSection } from '../components/WhisperModelSection';
 
-const STEPS = ['welcome', 'ai', 'stt', 'model', 'calendar', 'done'] as const;
+const STEPS = ['welcome', 'mic', 'ai', 'stt', 'calendar', 'done'] as const;
 type Step = (typeof STEPS)[number];
 
 interface Props {
@@ -44,10 +43,10 @@ export function Onboarding({ onClose }: Props) {
           <Sidebar step={step} />
           <div className="flex-1 p-8 min-h-[460px] flex flex-col">
             <div className="flex-1 overflow-y-auto pr-1">
-              {step === 'welcome' && <Welcome />}
+              {step === 'welcome' && <Welcome onQuickStart={() => setStep('mic')} />}
+              {step === 'mic' && <MicStep />}
               {step === 'ai' && <AiProviderStep />}
               {step === 'stt' && <SttStep />}
-              {step === 'model' && <ModelDownloadStep />}
               {step === 'calendar' && <CalendarStep />}
               {step === 'done' && <DoneStep />}
             </div>
@@ -96,8 +95,8 @@ function Sidebar({ step }: { step: Step }) {
                 ? 'AI provider'
                 : s === 'stt'
                   ? 'Transcription'
-                  : s === 'model'
-                    ? 'Local model (optional)'
+                  : s === 'mic'
+                    ? 'Microphone'
                     : s}
             </span>
           </li>
@@ -107,7 +106,7 @@ function Sidebar({ step }: { step: Step }) {
   );
 }
 
-function Welcome() {
+function Welcome({ onQuickStart }: { onQuickStart: () => void }) {
   return (
     <div className="text-center pt-6">
       <OliLogoStacked iconSize={64} wordmarkSize={32} />
@@ -116,9 +115,123 @@ function Welcome() {
         Oli listens, captures, and turns conversations into clear notes, decisions, and action items —
         all on your device.
       </p>
-      <p className="text-caption text-ink-muted mt-6">
-        Three quick configs and you&rsquo;re ready. Skip any step — you can finish later in Settings.
+      <div className="flex justify-center gap-2 mt-6">
+        <button
+          onClick={onQuickStart}
+          className="px-5 py-2.5 rounded-button text-btn text-white shadow-floating"
+          style={{ background: 'var(--oli-gradient-primary)' }}
+        >
+          Quick start (90s)
+        </button>
+        <button
+          onClick={onQuickStart}
+          className="px-5 py-2.5 rounded-button text-btn border border-line bg-white hover:bg-surface-cloud"
+        >
+          Full setup
+        </button>
+      </div>
+      <p className="text-caption text-ink-muted mt-4">
+        Both flow through the same steps. Quick start lets you skip optional bits.
       </p>
+    </div>
+  );
+}
+
+function MicStep() {
+  const [granted, setGranted] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [level, setLevel] = useState(0);
+  const streamRef = useRef<MediaStream | null>(null);
+  const ctxRef = useRef<AudioContext | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  const request = async () => {
+    setError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      });
+      streamRef.current = stream;
+      setGranted(true);
+      const ctx = new AudioContext();
+      ctxRef.current = ctx;
+      const src = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      src.connect(analyser);
+      const data = new Float32Array(analyser.fftSize);
+      const tick = () => {
+        analyser.getFloatTimeDomainData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+        const rms = Math.min(1, Math.sqrt(sum / data.length) * 4);
+        setLevel(rms);
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      tick();
+    } catch (err) {
+      setGranted(false);
+      setError((err as Error).message);
+    }
+  };
+
+  useEffect(() => {
+    void request();
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      void ctxRef.current?.close();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div>
+      <h3 className="text-h3 font-display">Microphone</h3>
+      <p className="text-body-sm text-ink-secondary mt-1">
+        Grant mic access and check the level meter — speak now to confirm input is reaching Oli.
+      </p>
+      <div className="mt-6 rounded-card border border-line bg-white p-6">
+        {granted === false ? (
+          <div className="text-center">
+            <p className="text-body-sm text-oli-coral">Mic access denied.</p>
+            <p className="text-caption text-ink-muted mt-1">{error}</p>
+            <button
+              onClick={request}
+              className="mt-3 text-btn px-3 py-1.5 rounded-button border border-line hover:bg-surface-cloud"
+            >
+              Try again
+            </button>
+          </div>
+        ) : (
+          <>
+            <p className="text-caption uppercase tracking-wider text-ink-muted">
+              Live mic level
+            </p>
+            <div className="h-3 mt-2 rounded-full bg-surface-cloud overflow-hidden">
+              <div
+                className="h-full transition-[width] duration-75"
+                style={{
+                  width: `${Math.min(100, level * 100)}%`,
+                  background:
+                    level > 0.85
+                      ? 'var(--oli-coral, #ff6b6b)'
+                      : level > 0.5
+                        ? 'var(--oli-amber, #f4b400)'
+                        : 'var(--oli-teal, #14b8a6)'
+                }}
+              />
+            </div>
+            <p className="text-caption text-ink-muted mt-2">
+              {granted == null
+                ? 'Requesting access…'
+                : level < 0.02
+                  ? 'No signal yet — speak into the mic.'
+                  : 'Looking good.'}
+            </p>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -142,23 +255,8 @@ function SttStep() {
   );
 }
 
-function ModelDownloadStep() {
-  return (
-    <div>
-      <h3 className="text-h3 font-display">Local speech model (optional)</h3>
-      <p className="text-body-sm text-ink-secondary mt-1">
-        Only needed if you picked <span className="font-medium text-ink-primary">Local</span>{' '}
-        transcription on the previous step. Pick a ggml model size — bigger = more accurate, slower.
-      </p>
-      <p className="text-caption text-ink-muted mt-3">
-        Skip if you&rsquo;re using Groq Cloud — no model download required.
-      </p>
-      <div className="mt-4">
-        <WhisperModelSection />
-      </div>
-    </div>
-  );
-}
+// ModelDownloadStep removed in 1.4.0. Local model download is opt-in from
+// Settings → Whisper models. Quick-start path defaults to Groq Cloud STT.
 
 function AiProviderStep() {
   return (
