@@ -289,6 +289,116 @@ const api = {
       return () => ipcRenderer.removeListener('calendar:auto-record-start', handler);
     }
   },
+  ai: {
+    diar: {
+      status: (): Promise<{ provider: 'cloud-assemblyai' | 'local-pyannote'; keyConfigured: boolean }> =>
+        ipcRenderer.invoke('diar:status'),
+      setProvider: (p: 'cloud-assemblyai' | 'local-pyannote'): Promise<void> =>
+        ipcRenderer.invoke('diar:setProvider', p),
+      setKey: (key: string | null): Promise<{ ok: boolean }> =>
+        ipcRenderer.invoke('diar:setKey', key),
+      run: (meetingId: string): Promise<{ ok: boolean; speakers: number; message?: string }> =>
+        ipcRenderer.invoke('diar:run', meetingId),
+      listSpeakers: (
+        meetingId: string
+      ): Promise<{ rawLabel: string; displayName: string }[]> =>
+        ipcRenderer.invoke('diar:listSpeakers', meetingId),
+      rename: (meetingId: string, rawLabel: string, displayName: string): Promise<void> =>
+        ipcRenderer.invoke('diar:rename', meetingId, rawLabel, displayName)
+    },
+    structured: {
+      extract: (
+        meetingId: string
+      ): Promise<{ ok: boolean; structured?: unknown; message?: string }> =>
+        ipcRenderer.invoke('structured:extract', meetingId),
+      list: (
+        meetingId: string
+      ): Promise<{
+        decisions: { id: number; text: string; segmentRef: number | null; createdAt: number }[];
+        actionItems: {
+          id: number;
+          owner: string | null;
+          task: string;
+          due: string | null;
+          segmentRef: number | null;
+          done: boolean;
+          createdAt: number;
+        }[];
+        topics: string[];
+      }> => ipcRenderer.invoke('structured:list', meetingId),
+      setActionDone: (id: number, done: boolean): Promise<void> =>
+        ipcRenderer.invoke('structured:setActionDone', id, done)
+    },
+    embed: {
+      status: (): Promise<{ provider: 'openai-small' | 'openai-large' }> =>
+        ipcRenderer.invoke('embed:status'),
+      setProvider: (p: 'openai-small' | 'openai-large'): Promise<void> =>
+        ipcRenderer.invoke('embed:setProvider', p),
+      reindexMeeting: (id: string): Promise<{ count: number; message?: string }> =>
+        ipcRenderer.invoke('embed:reindexMeeting', id),
+      reindexAll: (): Promise<{ meetings: number; chunks: number; message?: string }> =>
+        ipcRenderer.invoke('embed:reindexAll')
+    },
+    search: {
+      semantic: (
+        query: string,
+        k?: number
+      ): Promise<{
+        ok: boolean;
+        hits: {
+          meetingId: string;
+          meetingTitle: string;
+          segmentId: number | null;
+          segmentStartMs: number | null;
+          kind: string;
+          content: string;
+          score: number;
+        }[];
+        message?: string;
+      }> => ipcRenderer.invoke('search:semantic', query, k ?? 8)
+    },
+    ask: {
+      listConversations: (): Promise<
+        { id: string; title: string; createdAt: number; updatedAt: number; messageCount: number }[]
+      > => ipcRenderer.invoke('ask:listConversations'),
+      createConversation: (
+        title: string
+      ): Promise<{ id: string; title: string; createdAt: number; updatedAt: number; messageCount: number }> =>
+        ipcRenderer.invoke('ask:createConversation', title),
+      deleteConversation: (id: string): Promise<void> =>
+        ipcRenderer.invoke('ask:deleteConversation', id),
+      listMessages: (
+        conversationId: string
+      ): Promise<
+        {
+          id: number;
+          role: 'user' | 'assistant';
+          content: string;
+          citations: {
+            meetingId: string;
+            meetingTitle: string;
+            segmentId: number | null;
+            segmentStartMs: number | null;
+            score: number;
+          }[];
+          createdAt: number;
+        }[]
+      > => ipcRenderer.invoke('ask:listMessages', conversationId),
+      send: (
+        conversationId: string,
+        question: string
+      ): Promise<{
+        ok: boolean;
+        message?: {
+          id: number;
+          role: 'assistant';
+          content: string;
+          citations: unknown[];
+          createdAt: number;
+        };
+      }> => ipcRenderer.invoke('ask:send', conversationId, question)
+    }
+  },
   mini: {
     show: (): Promise<void> => ipcRenderer.invoke('mini:show'),
     close: (): Promise<void> => ipcRenderer.invoke('mini:close'),

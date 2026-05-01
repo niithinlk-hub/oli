@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { AppSettings } from '@shared/types';
 import { OliLogoHorizontal } from '../components/brand/OliLogoHorizontal';
 import { AiProviderSection } from '../components/AiProviderSection';
+import { AiSection } from '../components/AiSection';
 import { SttProviderSection } from '../components/SttProviderSection';
 import { WhisperModelSection } from '../components/WhisperModelSection';
 import { CalendarSubscriptionsSection } from '../components/CalendarSubscriptionsSection';
@@ -139,6 +140,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
       >
         <AiProviderSection />
         <SttProviderSection />
+        <AiSection />
         <WhisperModelSection />
         <CalendarSubscriptionsSection />
 

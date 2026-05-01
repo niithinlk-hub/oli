@@ -13,6 +13,7 @@
 import type Database from 'better-sqlite3';
 import { migration_001_init } from './001_init';
 import { migration_002_calendar_subscriptions } from './002_calendar_subscriptions';
+import { migration_003_ai_intelligence } from './003_ai_intelligence';
 
 interface Migration {
   id: number;
@@ -20,7 +21,11 @@ interface Migration {
   sql: string;
 }
 
-const ALL: Migration[] = [migration_001_init, migration_002_calendar_subscriptions];
+const ALL: Migration[] = [
+  migration_001_init,
+  migration_002_calendar_subscriptions,
+  migration_003_ai_intelligence
+];
 
 export function runMigrations(db: Database.Database): { applied: number[] } {
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (

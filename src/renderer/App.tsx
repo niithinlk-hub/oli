@@ -7,6 +7,7 @@ import { Settings } from './pages/Settings';
 import { Brand } from './pages/Brand';
 import { Home } from './pages/Home';
 import { Calendar } from './pages/Calendar';
+import { Ask } from './pages/Ask';
 import { EmailRephraser } from './pages/EmailRephraser';
 import { Onboarding, shouldShowOnboarding } from './pages/Onboarding';
 import { UpcomingEvents } from './components/UpcomingEvents';
@@ -17,7 +18,7 @@ import { useMeetingsStore } from './store/meetings';
 import { useUiPrefs } from './store/uiPrefs';
 import { OliLogoStacked } from './components/brand/OliLogoStacked';
 
-type View = 'home' | 'meeting' | 'email' | 'calendar' | 'settings' | 'brand';
+type View = 'home' | 'meeting' | 'email' | 'calendar' | 'ask' | 'settings' | 'brand';
 
 export default function App() {
   const selectedId = useMeetingsStore((s) => s.selectedId);
@@ -201,6 +202,19 @@ export default function App() {
     );
   }
 
+  if (view === 'ask') {
+    return (
+      <div className="h-screen bg-surface-cloud text-ink-primary">
+        <Ask onHome={() => setView('home')} onOpenMeeting={() => setView('meeting')} />
+        <CommandPalette
+          open={paletteOpen}
+          onClose={() => setPaletteOpen(false)}
+          onSwitchView={setView}
+        />
+      </div>
+    );
+  }
+
   // Sidebar pixel width as percentage relative to viewport so the panel API
   // can use sizes in %. Recompute on every render — cheap.
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1320;
@@ -225,6 +239,7 @@ export default function App() {
             onOpenSearch={() => setPaletteOpen(true)}
             onOpenEmail={() => setView('email')}
             onOpenCalendar={() => setView('calendar')}
+            onOpenAsk={() => setView('ask')}
             upcomingSlot={sidebarMode === 'expanded' ? <UpcomingEvents /> : undefined}
           />
         </Panel>

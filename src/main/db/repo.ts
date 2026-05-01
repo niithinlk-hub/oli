@@ -127,7 +127,8 @@ export const transcriptRepo = {
       startMs: r.start_ms,
       endMs: r.end_ms,
       text: r.text,
-      source: r.source
+      source: r.source,
+      speakerLabel: r.speaker_label ?? null
     }));
   },
   insert(seg: Omit<TranscriptSegment, 'id'>): number {

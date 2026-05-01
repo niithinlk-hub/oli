@@ -19,6 +19,7 @@ import { meetingsRepo } from './db/repo';
 import { registerLlmIpc } from './ipc/llm';
 import { closeMiniRecorder, registerMiniRecorderIpc } from './windows/miniRecorder';
 import { registerSttIpc } from './ipc/stt';
+import { registerAiIpc } from './ipc/ai';
 import { registerCalendarIpc } from './ipc/calendar';
 import { registerExportIpc } from './ipc/export';
 import { seedBuiltInTemplates } from './llm/templates';
@@ -106,6 +107,7 @@ app.whenReady().then(() => {
   registerSettingsIpc();
   registerLlmIpc();
   registerSttIpc();
+  registerAiIpc();
   registerMiniRecorderIpc();
   registerCalendarIpc();
   registerExportIpc();
