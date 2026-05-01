@@ -165,3 +165,68 @@ html, body, #root {
   margin: 1.4em 0;
 }
 .oli-md strong { color: var(--oli-text-primary); }
+
+/* cmdk command palette */
+.cmd-group [cmdk-group-heading] {
+  padding: 0.5rem 0.75rem 0.25rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--oli-text-muted);
+}
+.cmd-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+.cmd-item[data-selected="true"] {
+  background: var(--oli-surface-cloud);
+}
+.cmd-item:hover {
+  background: var(--oli-surface-cloud);
+}
+
+/* live captions: subtle pulse on newest segment arrival */
+@keyframes caption-pulse {
+  0% { background-color: rgba(56, 189, 248, 0.18); }
+  100% { background-color: transparent; }
+}
+.caption-pulse {
+  animation: caption-pulse 0.9s ease-out;
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
+  margin-left: -0.25rem;
+}
+
+/* radial recorder ring shimmer when idle */
+@keyframes ring-shimmer {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* audio scrubber: oli teal accent */
+.oli-scrub {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--oli-border, #e1e8f1);
+  outline: none;
+}
+.oli-scrub::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--oli-teal, #14b8a6);
+  cursor: pointer;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.18);
+}
+.oli-scrub:hover::-webkit-slider-thumb {
+  box-shadow: 0 0 0 6px rgba(20, 184, 166, 0.22);
+}

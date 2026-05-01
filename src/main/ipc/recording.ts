@@ -63,6 +63,9 @@ export function registerRecordingIpc(): void {
       onError: (window, err) => {
         console.error(`whisper window ${window.windowIndex} failed:`, err);
         broadcast('recording:error', { meetingId: window.meetingId, message: err.message });
+      },
+      onInflightChange: (inflight, queued) => {
+        broadcast('recording:inflight', { inflight, queued });
       }
     });
 

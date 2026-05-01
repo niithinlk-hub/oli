@@ -73,6 +73,12 @@ const api = {
         cb(payload);
       ipcRenderer.on('recording:error', handler);
       return () => ipcRenderer.removeListener('recording:error', handler);
+    },
+    onInflight: (cb: (payload: { inflight: number; queued: number }) => void) => {
+      const handler = (_e: IpcRendererEvent, payload: { inflight: number; queued: number }) =>
+        cb(payload);
+      ipcRenderer.on('recording:inflight', handler);
+      return () => ipcRenderer.removeListener('recording:inflight', handler);
     }
   },
   settings: {
@@ -89,7 +95,12 @@ const api = {
       ipcRenderer.invoke('settings:setOpenAiKey', key),
     hasOpenAiKey: (): Promise<boolean> => ipcRenderer.invoke('settings:hasOpenAiKey'),
     getOpenAiKeyMasked: (): Promise<string | null> =>
-      ipcRenderer.invoke('settings:getOpenAiKeyMasked')
+      ipcRenderer.invoke('settings:getOpenAiKeyMasked'),
+    /** Read a UI pref. Key must be prefixed `ui.` */
+    getUi: (key: string): Promise<string | null> => ipcRenderer.invoke('settings:getUi', key),
+    /** Persist a UI pref. Key must be prefixed `ui.` Pass null to clear. */
+    setUi: (key: string, value: string | null): Promise<void> =>
+      ipcRenderer.invoke('settings:setUi', key, value)
   },
   llm: {
     listTemplates: (): Promise<Template[]> => ipcRenderer.invoke('templates:list'),
@@ -230,6 +241,30 @@ const api = {
       const handler = (_e: IpcRendererEvent, payload: { event: CalendarEvent }) => cb(payload);
       ipcRenderer.on('calendar:notify-clicked', handler);
       return () => ipcRenderer.removeListener('calendar:notify-clicked', handler);
+    }
+  },
+  mini: {
+    show: (): Promise<void> => ipcRenderer.invoke('mini:show'),
+    close: (): Promise<void> => ipcRenderer.invoke('mini:close'),
+    isOpen: (): Promise<boolean> => ipcRenderer.invoke('mini:isOpen'),
+    /** Main window calls this on minimize so mini opens iff recording is active. */
+    openIfRecording: (recording: boolean): Promise<void> =>
+      ipcRenderer.invoke('mini:openIfRecording', recording),
+    /** Mini window's stop button. */
+    toggleRecord: (): void => ipcRenderer.send('mini:toggle-record'),
+    /** Forward an amplitude tick from the main window into the mini renderer. */
+    sendAmplitude: (payload: { mic: number; loopback: number; bars: number[] }): void =>
+      ipcRenderer.send('mini:amplitude', payload),
+    onAmplitude: (cb: (p: { mic: number; loopback: number; bars: number[] }) => void) => {
+      const handler = (_e: IpcRendererEvent, p: { mic: number; loopback: number; bars: number[] }) =>
+        cb(p);
+      ipcRenderer.on('mini:amplitude', handler);
+      return () => ipcRenderer.removeListener('mini:amplitude', handler);
+    },
+    onRequestOpenOnHide: (cb: () => void) => {
+      const handler = () => cb();
+      ipcRenderer.on('app:request-mini-on-hide', handler);
+      return () => ipcRenderer.removeListener('app:request-mini-on-hide', handler);
     }
   },
   app: {

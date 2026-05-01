@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { useMeetingsStore } from '../store/meetings';
+import { useUiPrefs } from '../store/uiPrefs';
 import { OliLogoHorizontal } from './brand/OliLogoHorizontal';
+import { OliIcon } from './brand/OliIcon';
 
 interface Props {
   onOpenHome?: () => void;
@@ -30,6 +32,8 @@ export function MeetingList({
   upcomingSlot
 }: Props) {
   const { meetings, selectedId, refresh, select, createMeeting } = useMeetingsStore();
+  const sidebarMode = useUiPrefs((s) => s.sidebarMode);
+  const setSidebarMode = useUiPrefs((s) => s.setSidebarMode);
 
   useEffect(() => {
     refresh();
@@ -40,8 +44,31 @@ export function MeetingList({
     await createMeeting(title);
   };
 
+  const toggleRail = () => setSidebarMode(sidebarMode === 'rail' ? 'expanded' : 'rail');
+
+  if (sidebarMode === 'rail') {
+    return (
+      <aside className="h-full w-14 shrink-0 border-r border-line bg-white flex flex-col items-center py-2 gap-1">
+        <button
+          onClick={onOpenBrand}
+          className="rounded-md hover:bg-surface-cloud p-1.5 transition"
+          title="Brand"
+        >
+          <OliIcon size={24} />
+        </button>
+        <RailBtn icon="⌂" title="Home" onClick={onOpenHome} />
+        <RailBtn icon="⌕" title="Search (Ctrl+K)" onClick={onOpenSearch} />
+        <RailBtn icon="🎙" title="New meeting (Ctrl+N)" onClick={handleNew} />
+        <RailBtn icon="✉" title="Email rephraser" onClick={onOpenEmail} />
+        <RailBtn icon="⚙" title="Settings" onClick={onOpenSettings} />
+        <div className="flex-1" />
+        <RailBtn icon="⇥" title="Expand sidebar ([ to toggle)" onClick={toggleRail} />
+      </aside>
+    );
+  }
+
   return (
-    <aside className="w-80 shrink-0 border-r border-line bg-white flex flex-col">
+    <aside className="h-full w-full shrink-0 border-r border-line bg-white flex flex-col">
       <div className="titlebar-drag h-14 flex items-center justify-between px-4 border-b border-line">
         <button
           onClick={onOpenHome ?? onOpenBrand}
@@ -51,6 +78,13 @@ export function MeetingList({
           <OliLogoHorizontal iconSize={28} wordmarkSize={22} />
         </button>
         <div className="flex items-center gap-1">
+          <button
+            onClick={toggleRail}
+            className="text-caption px-2 py-1.5 rounded-md text-ink-secondary hover:bg-surface-cloud"
+            title="Collapse sidebar ([ to toggle)"
+          >
+            ⇤
+          </button>
           {onOpenSettings && (
             <button
               onClick={onOpenSettings}
@@ -99,13 +133,13 @@ export function MeetingList({
           <button
             onClick={onOpenSearch}
             className="w-full px-3 py-2 rounded-button text-btn border border-line bg-white hover:bg-surface-cloud text-ink-secondary flex items-center justify-between"
-            title="Ctrl+F"
+            title="Ctrl+K"
           >
             <span className="flex items-center gap-2">
               <span className="text-ink-muted">⌕</span>
               Search memory…
             </span>
-            <kbd className="text-caption text-ink-muted font-mono">Ctrl+F</kbd>
+            <kbd className="text-caption text-ink-muted font-mono">Ctrl+K</kbd>
           </button>
         )}
       </div>
@@ -143,6 +177,27 @@ export function MeetingList({
         )}
       </div>
     </aside>
+  );
+}
+
+function RailBtn({
+  icon,
+  title,
+  onClick
+}: {
+  icon: string;
+  title: string;
+  onClick?: () => void;
+}) {
+  if (!onClick) return null;
+  return (
+    <button
+      onClick={onClick}
+      className="rounded-md hover:bg-surface-cloud p-2 text-body text-ink-secondary transition"
+      title={title}
+    >
+      {icon}
+    </button>
   );
 }
 

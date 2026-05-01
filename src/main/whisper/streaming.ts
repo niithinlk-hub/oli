@@ -6,6 +6,7 @@ import type { ChunkWindow } from '../audio/recorder';
 export interface StreamingTranscriberCallbacks {
   onSegments: (window: ChunkWindow, segments: WhisperSegment[]) => void;
   onError: (window: ChunkWindow, err: Error) => void;
+  onInflightChange?: (inflight: number, queued: number) => void;
 }
 
 /**
@@ -30,7 +31,12 @@ export class StreamingTranscriber {
   enqueue(window: ChunkWindow): void {
     if (this.cancelled) return;
     this.queue.push(window);
+    this.emitInflight();
     this.tick();
+  }
+
+  private emitInflight(): void {
+    this.cb.onInflightChange?.(this.inflight, this.queue.length);
   }
 
   cancel(): void {
@@ -44,8 +50,10 @@ export class StreamingTranscriber {
       const next = this.queue.shift();
       if (!next) break;
       this.inflight += 1;
+      this.emitInflight();
       void this.runOne(next).finally(() => {
         this.inflight -= 1;
+        this.emitInflight();
         if (!this.cancelled && this.queue.length > 0) this.tick();
       });
     }
