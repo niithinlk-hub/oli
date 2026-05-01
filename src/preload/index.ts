@@ -89,7 +89,12 @@ const api = {
       ipcRenderer.invoke('settings:setOpenAiKey', key),
     hasOpenAiKey: (): Promise<boolean> => ipcRenderer.invoke('settings:hasOpenAiKey'),
     getOpenAiKeyMasked: (): Promise<string | null> =>
-      ipcRenderer.invoke('settings:getOpenAiKeyMasked')
+      ipcRenderer.invoke('settings:getOpenAiKeyMasked'),
+    /** Read a UI pref. Key must be prefixed `ui.` */
+    getUi: (key: string): Promise<string | null> => ipcRenderer.invoke('settings:getUi', key),
+    /** Persist a UI pref. Key must be prefixed `ui.` Pass null to clear. */
+    setUi: (key: string, value: string | null): Promise<void> =>
+      ipcRenderer.invoke('settings:setUi', key, value)
   },
   llm: {
     listTemplates: (): Promise<Template[]> => ipcRenderer.invoke('templates:list'),

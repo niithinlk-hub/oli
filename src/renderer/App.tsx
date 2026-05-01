@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import { MeetingList } from './components/MeetingList';
 import { MeetingDetail } from './pages/MeetingDetail';
 import { Settings } from './pages/Settings';
@@ -9,7 +10,9 @@ import { Onboarding, shouldShowOnboarding } from './pages/Onboarding';
 import { UpcomingEvents } from './components/UpcomingEvents';
 import { SearchBar } from './components/SearchBar';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { CommandPalette } from './components/command-palette/CommandPalette';
 import { useMeetingsStore } from './store/meetings';
+import { useUiPrefs } from './store/uiPrefs';
 import { OliLogoStacked } from './components/brand/OliLogoStacked';
 
 type View = 'home' | 'meeting' | 'email' | 'settings' | 'brand';
@@ -17,15 +20,22 @@ type View = 'home' | 'meeting' | 'email' | 'settings' | 'brand';
 export default function App() {
   const selectedId = useMeetingsStore((s) => s.selectedId);
   const createMeeting = useMeetingsStore((s) => s.createMeeting);
+  const hydrate = useUiPrefs((s) => s.hydrate);
+  const sidebarMode = useUiPrefs((s) => s.sidebarMode);
+  const setSidebarMode = useUiPrefs((s) => s.setSidebarMode);
+  const sidebarPx = useUiPrefs((s) => s.sidebarPx);
+  const setSidebarPx = useUiPrefs((s) => s.setSidebarPx);
   const [view, setView] = useState<View>('home');
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [searchSignal, setSearchSignal] = useState(0);
+  const [searchSignal] = useState(0);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [appVersion, setAppVersion] = useState<string>('');
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
+    void hydrate();
     void window.floyd.app.version().then(setAppVersion);
-  }, []);
+  }, [hydrate]);
 
   useEffect(() => {
     setShowOnboarding(shouldShowOnboarding());
@@ -44,8 +54,7 @@ export default function App() {
       setView('meeting');
     });
     const offSearch = window.floyd.menu.on('menu:search', () => {
-      setView('meeting');
-      setSearchSignal((n) => n + 1);
+      setPaletteOpen(true);
     });
     const offSettings = window.floyd.menu.on('menu:settings', () => setView('settings'));
     const offBrand = window.floyd.menu.on('menu:brand', () => setView('brand'));
@@ -59,6 +68,28 @@ export default function App() {
     };
   }, [createMeeting]);
 
+  // Keyboard shortcuts: Ctrl+K (palette), [ (sidebar rail toggle)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const inField =
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          (target as HTMLElement).isContentEditable);
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+        return;
+      }
+      if (e.key === '[' && !inField && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        setSidebarMode(sidebarMode === 'rail' ? 'expanded' : 'rail');
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [sidebarMode, setSidebarMode]);
+
   // Home + Email = full-window, no meeting sidebar
   if (view === 'home') {
     return (
@@ -70,10 +101,15 @@ export default function App() {
           onOpenBrand={() => setView('brand')}
         />
         {showOnboarding && <Onboarding onClose={() => setShowOnboarding(false)} />}
+        <CommandPalette
+          open={paletteOpen}
+          onClose={() => setPaletteOpen(false)}
+          onSwitchView={setView}
+        />
         <ConfirmDialog
           open={aboutOpen}
           title="Oli"
-          message={`Local-first AI meeting memory + email rephraser for Windows.\n\nVersion ${appVersion || '0.1.5'}\nhttps://github.com/niithinlk-hub/oli`}
+          message={`Local-first AI meeting memory + email rephraser for Windows.\n\nVersion ${appVersion || '1.1.0'}\nhttps://github.com/niithinlk-hub/oli`}
           confirmLabel="OK"
           onConfirm={() => setAboutOpen(false)}
           onCancel={() => setAboutOpen(false)}
@@ -86,53 +122,85 @@ export default function App() {
     return (
       <div className="h-screen bg-surface-cloud text-ink-primary">
         <EmailRephraser onHome={() => setView('home')} onOpenSettings={() => setView('settings')} />
+        <CommandPalette
+          open={paletteOpen}
+          onClose={() => setPaletteOpen(false)}
+          onSwitchView={setView}
+        />
       </div>
     );
   }
 
+  // Sidebar pixel width as percentage relative to viewport so the panel API
+  // can use sizes in %. Recompute on every render — cheap.
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1320;
+  const sidebarPct =
+    sidebarMode === 'rail' ? (56 / vw) * 100 : Math.max(15, Math.min(40, (sidebarPx / vw) * 100));
+
   return (
     <div className="h-screen flex bg-surface-cloud text-ink-primary">
-      <MeetingList
-        onOpenHome={() => setView('home')}
-        onOpenSettings={() => setView('settings')}
-        onOpenBrand={() => setView('brand')}
-        onOpenSearch={() => setSearchSignal((n) => n + 1)}
-        onOpenEmail={() => setView('email')}
-        upcomingSlot={<UpcomingEvents />}
-      />
-      {view === 'settings' ? (
-        <Settings onClose={() => setView('home')} />
-      ) : view === 'brand' ? (
-        <Brand onClose={() => setView('home')} />
-      ) : selectedId ? (
-        <MeetingDetail meetingId={selectedId} />
-      ) : (
-        <section
-          className="flex-1 flex items-center justify-center"
-          style={{ background: 'var(--oli-gradient-soft-bg)' }}
+      <PanelGroup direction="horizontal" className="flex-1">
+        <Panel
+          defaultSize={sidebarPct}
+          minSize={sidebarMode === 'rail' ? (56 / vw) * 100 : 15}
+          maxSize={sidebarMode === 'rail' ? (56 / vw) * 100 : 40}
+          onResize={(size) => {
+            if (sidebarMode === 'expanded') setSidebarPx((size / 100) * vw);
+          }}
         >
-          <div className="text-center">
-            <OliLogoStacked iconSize={88} wordmarkSize={40} />
-            <p className="text-h3 mt-6 font-display">Your AI meeting memory.</p>
-            <p className="text-body text-ink-secondary mt-1 max-w-md mx-auto">
-              Oli listens, captures, and turns conversations into clear notes, decisions, and action items.
-            </p>
-            <p className="text-caption text-ink-muted mt-4">
-              <kbd className="font-mono px-1.5 py-0.5 rounded bg-white border border-line">Ctrl+N</kbd>{' '}
-              new meeting ·{' '}
-              <kbd className="font-mono px-1.5 py-0.5 rounded bg-white border border-line">Ctrl+F</kbd>{' '}
-              search memory
-            </p>
-          </div>
-        </section>
-      )}
+          <MeetingList
+            onOpenHome={() => setView('home')}
+            onOpenSettings={() => setView('settings')}
+            onOpenBrand={() => setView('brand')}
+            onOpenSearch={() => setPaletteOpen(true)}
+            onOpenEmail={() => setView('email')}
+            upcomingSlot={sidebarMode === 'expanded' ? <UpcomingEvents /> : undefined}
+          />
+        </Panel>
+        {sidebarMode === 'expanded' && (
+          <PanelResizeHandle className="w-1 bg-line hover:bg-oli-blue/40 transition-colors data-[resize-handle-state=drag]:bg-oli-blue" />
+        )}
+        <Panel minSize={40}>
+          {view === 'settings' ? (
+            <Settings onClose={() => setView('home')} />
+          ) : view === 'brand' ? (
+            <Brand onClose={() => setView('home')} />
+          ) : selectedId ? (
+            <MeetingDetail meetingId={selectedId} />
+          ) : (
+            <section
+              className="h-full flex items-center justify-center"
+              style={{ background: 'var(--oli-gradient-soft-bg)' }}
+            >
+              <div className="text-center">
+                <OliLogoStacked iconSize={88} wordmarkSize={40} />
+                <p className="text-h3 mt-6 font-display">Your AI meeting memory.</p>
+                <p className="text-body text-ink-secondary mt-1 max-w-md mx-auto">
+                  Oli listens, captures, and turns conversations into clear notes, decisions, and action items.
+                </p>
+                <p className="text-caption text-ink-muted mt-4">
+                  <kbd className="font-mono px-1.5 py-0.5 rounded bg-white border border-line">Ctrl+N</kbd>{' '}
+                  new meeting ·{' '}
+                  <kbd className="font-mono px-1.5 py-0.5 rounded bg-white border border-line">Ctrl+K</kbd>{' '}
+                  command palette
+                </p>
+              </div>
+            </section>
+          )}
+        </Panel>
+      </PanelGroup>
 
       <SearchBar openSignal={searchSignal} />
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onSwitchView={setView}
+      />
       {showOnboarding && <Onboarding onClose={() => setShowOnboarding(false)} />}
       <ConfirmDialog
         open={aboutOpen}
         title="Oli"
-        message={`Local-first AI meeting memory + email rephraser for Windows.\n\nVersion ${appVersion || '0.1.5'}\nhttps://github.com/niithinlk-hub/oli`}
+        message={`Local-first AI meeting memory + email rephraser for Windows.\n\nVersion ${appVersion || '1.1.0'}\nhttps://github.com/niithinlk-hub/oli`}
         confirmLabel="OK"
         onConfirm={() => setAboutOpen(false)}
         onCancel={() => setAboutOpen(false)}

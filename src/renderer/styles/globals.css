@@ -165,3 +165,27 @@ html, body, #root {
   margin: 1.4em 0;
 }
 .oli-md strong { color: var(--oli-text-primary); }
+
+/* cmdk command palette */
+.cmd-group [cmdk-group-heading] {
+  padding: 0.5rem 0.75rem 0.25rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--oli-text-muted);
+}
+.cmd-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+.cmd-item[data-selected="true"] {
+  background: var(--oli-surface-cloud);
+}
+.cmd-item:hover {
+  background: var(--oli-surface-cloud);
+}

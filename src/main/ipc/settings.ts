@@ -30,6 +30,18 @@ export function registerSettingsIpc(): void {
     else settingsRepo.delete(SETTINGS_KEYS.whisperBinary);
   });
 
+  // Generic UI prefs bag. Renderer-only state — sidebar collapse, splitter
+  // sizes, theme, etc. Keys must start with `ui.` to keep the namespace tidy.
+  ipcMain.handle('settings:getUi', (_e, key: string) => {
+    if (!key.startsWith('ui.')) throw new Error('ui prefs must be prefixed ui.');
+    return settingsRepo.get(key);
+  });
+  ipcMain.handle('settings:setUi', (_e, key: string, value: string | null) => {
+    if (!key.startsWith('ui.')) throw new Error('ui prefs must be prefixed ui.');
+    if (value == null) settingsRepo.delete(key);
+    else settingsRepo.set(key, value);
+  });
+
   ipcMain.handle('settings:setWhisperModel', (_e, path: string | null) => {
     if (path) settingsRepo.set(SETTINGS_KEYS.whisperModel, path);
     else settingsRepo.delete(SETTINGS_KEYS.whisperModel);

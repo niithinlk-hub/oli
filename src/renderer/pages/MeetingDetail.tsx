@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import type { Meeting, NoteDoc, TranscriptSegment } from '@shared/types';
 import { RecordButton } from '../components/RecordButton';
 import { NotesEditor } from '../components/NotesEditor';
@@ -6,6 +7,7 @@ import { TemplatePicker } from '../components/TemplatePicker';
 import { AskOliChat } from '../components/AskOliChat';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useMeetingsStore } from '../store/meetings';
+import { useUiPrefs } from '../store/uiPrefs';
 import { renderMarkdown } from '../utils/markdown';
 import { useElapsedSince } from '../audio/useDuration';
 
@@ -183,9 +185,9 @@ export function MeetingDetail({ meetingId }: Props) {
         </div>
       )}
 
-      <div className="flex-1 grid grid-cols-2 overflow-hidden">
+      <ResizableSplit>
         {/* Transcript */}
-        <div className="border-r border-line flex flex-col bg-white">
+        <div className="h-full border-r border-line flex flex-col bg-white">
           <div className="px-6 py-3 text-caption uppercase tracking-wider text-ink-muted border-b border-line">
             Transcript
             {transcript.length > 0 && (
@@ -217,7 +219,7 @@ export function MeetingDetail({ meetingId }: Props) {
         </div>
 
         {/* Right pane: notes / ask oli tabs */}
-        <div className="flex flex-col bg-white">
+        <div className="h-full flex flex-col bg-white">
           <div className="px-6 py-3 flex items-center justify-between gap-3 border-b border-line">
             <div className="flex items-center gap-1 rounded-button bg-surface-cloud p-1">
               <TabBtn active={tab === 'notes'} onClick={() => setTab('notes')}>
@@ -284,7 +286,7 @@ export function MeetingDetail({ meetingId }: Props) {
             <AskOliChat meetingId={meetingId} />
           )}
         </div>
-      </div>
+      </ResizableSplit>
 
       <ConfirmDialog
         open={confirmDelete}
@@ -296,6 +298,30 @@ export function MeetingDetail({ meetingId }: Props) {
         onCancel={() => setConfirmDelete(false)}
       />
     </section>
+  );
+}
+
+function ResizableSplit({ children }: { children: React.ReactNode[] }) {
+  const pct = useUiPrefs((s) => s.meetingTranscriptPct);
+  const setPct = useUiPrefs((s) => s.setMeetingTranscriptPct);
+  const left = children[0];
+  const right = children[1];
+  return (
+    <div className="flex-1 overflow-hidden">
+      <PanelGroup
+        direction="horizontal"
+        autoSaveId="oli.meeting.split"
+        onLayout={(sizes) => {
+          if (sizes[0] && Math.abs(sizes[0] - pct) >= 1) setPct(sizes[0]);
+        }}
+      >
+        <Panel defaultSize={pct} minSize={20} maxSize={80}>
+          {left}
+        </Panel>
+        <PanelResizeHandle className="w-1 bg-line hover:bg-oli-blue/40 transition-colors data-[resize-handle-state=drag]:bg-oli-blue" />
+        <Panel minSize={20}>{right}</Panel>
+      </PanelGroup>
+    </div>
   );
 }
 

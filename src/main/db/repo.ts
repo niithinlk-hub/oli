@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Meeting, NoteDoc, TranscriptSegment } from '@shared/types';
 import { SCHEMA_SQL } from './schema';
+import { runMigrations } from './migrations';
 
 let db: Database.Database | null = null;
 
@@ -15,6 +16,7 @@ export function initDb(): Database.Database {
   const dbPath = join(userData, 'synthetic-floyd.sqlite');
   db = new Database(dbPath);
   db.exec(SCHEMA_SQL);
+  runMigrations(db);
   return db;
 }
 
