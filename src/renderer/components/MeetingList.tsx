@@ -10,6 +10,7 @@ interface Props {
   onOpenBrand?: () => void;
   onOpenSearch?: () => void;
   onOpenEmail?: () => void;
+  onOpenCalendar?: () => void;
   upcomingSlot?: React.ReactNode;
 }
 
@@ -29,6 +30,7 @@ export function MeetingList({
   onOpenBrand,
   onOpenSearch,
   onOpenEmail,
+  onOpenCalendar,
   upcomingSlot
 }: Props) {
   const { meetings, selectedId, refresh, select, createMeeting } = useMeetingsStore();
@@ -59,6 +61,7 @@ export function MeetingList({
         <RailBtn icon="⌂" title="Home" onClick={onOpenHome} />
         <RailBtn icon="⌕" title="Search (Ctrl+K)" onClick={onOpenSearch} />
         <RailBtn icon="🎙" title="New meeting (Ctrl+N)" onClick={handleNew} />
+        <RailBtn icon="📅" title="Calendar" onClick={onOpenCalendar} />
         <RailBtn icon="✉" title="Email rephraser" onClick={onOpenEmail} />
         <RailBtn icon="⚙" title="Settings" onClick={onOpenSettings} />
         <div className="flex-1" />
@@ -97,24 +100,33 @@ export function MeetingList({
         </div>
       </div>
 
-      {(onOpenHome || onOpenEmail) && (
-        <div className="px-4 py-2 border-b border-line flex items-center gap-1.5 bg-white">
+      {(onOpenHome || onOpenEmail || onOpenCalendar) && (
+        <div className="px-4 py-2 border-b border-line flex items-center gap-1.5 bg-white flex-wrap">
           {onOpenHome && (
             <button
               onClick={onOpenHome}
-              className="flex-1 text-caption px-2 py-1.5 rounded-md text-ink-secondary hover:bg-surface-cloud"
+              className="text-caption px-2 py-1.5 rounded-md text-ink-secondary hover:bg-surface-cloud"
               title="Home"
             >
               ⌂ Home
             </button>
           )}
+          {onOpenCalendar && (
+            <button
+              onClick={onOpenCalendar}
+              className="text-caption px-2 py-1.5 rounded-md text-ink-secondary hover:bg-surface-cloud"
+              title="Calendar"
+            >
+              📅 Calendar
+            </button>
+          )}
           {onOpenEmail && (
             <button
               onClick={onOpenEmail}
-              className="flex-1 text-caption px-2 py-1.5 rounded-md text-ink-secondary hover:bg-surface-cloud"
+              className="text-caption px-2 py-1.5 rounded-md text-ink-secondary hover:bg-surface-cloud"
               title="Email rephraser"
             >
-              ✉ Email rephraser
+              ✉ Email
             </button>
           )}
         </div>

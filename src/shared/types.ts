@@ -46,6 +46,10 @@ export interface CalendarEvent {
   endsAt: number;
   attendees: string[];
   meetingUrl: string | null;
+  /** Subscription that produced this event (null for OAuth Google/Outlook). */
+  subscriptionId?: string | null;
+  /** Per-event override of auto-record (null = use global default). */
+  autoRecordOverride?: boolean | null;
 }
 
 export interface RecordingStartArgs {

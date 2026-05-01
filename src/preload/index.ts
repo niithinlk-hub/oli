@@ -230,8 +230,49 @@ const api = {
       ipcRenderer.invoke('calendar:importIcs'),
     upcoming: (withinMs?: number): Promise<CalendarEvent[]> =>
       ipcRenderer.invoke('calendar:upcoming', withinMs),
+    forDay: (dayMs: number): Promise<CalendarEvent[]> =>
+      ipcRenderer.invoke('calendar:forDay', dayMs),
     refresh: (): Promise<{ ok: boolean; message?: string }> =>
       ipcRenderer.invoke('calendar:refresh'),
+    setEventOverride: (eventId: string, override: boolean | null): Promise<void> =>
+      ipcRenderer.invoke('calendar:setEventOverride', eventId, override),
+    /** ICS URL / folder / Outlook COM subscriptions. */
+    subs: {
+      list: (): Promise<
+        {
+          id: string;
+          kind: 'ics-url' | 'ics-folder' | 'outlook-com';
+          name: string;
+          url: string | null;
+          folderPath: string | null;
+          color: string | null;
+          pollMinutes: number;
+          enabled: boolean;
+          lastSyncedAt: number | null;
+          lastError: string | null;
+        }[]
+      > => ipcRenderer.invoke('calendar:subs:list'),
+      add: (input: {
+        kind: 'ics-url' | 'ics-folder' | 'outlook-com';
+        name: string;
+        url?: string | null;
+        folderPath?: string | null;
+        color?: string | null;
+        pollMinutes?: number;
+      }): Promise<unknown> => ipcRenderer.invoke('calendar:subs:add', input),
+      update: (id: string, patch: unknown): Promise<unknown> =>
+        ipcRenderer.invoke('calendar:subs:update', id, patch),
+      remove: (id: string): Promise<void> => ipcRenderer.invoke('calendar:subs:remove', id),
+      sync: (id: string): Promise<{ ok: boolean; count?: number; message?: string }> =>
+        ipcRenderer.invoke('calendar:subs:sync', id)
+    },
+    outlookComAvailable: (): Promise<boolean> => ipcRenderer.invoke('calendar:outlookComAvailable'),
+    defaultFolderPath: (): Promise<string> => ipcRenderer.invoke('calendar:defaultFolderPath'),
+    autoRecord: {
+      get: (): Promise<'off' | 'prompt' | 'auto'> => ipcRenderer.invoke('calendar:autoRecord:get'),
+      set: (mode: 'off' | 'prompt' | 'auto'): Promise<void> =>
+        ipcRenderer.invoke('calendar:autoRecord:set', mode)
+    },
     onUpdated: (cb: () => void) => {
       const handler = () => cb();
       ipcRenderer.on('calendar:updated', handler);
@@ -241,6 +282,11 @@ const api = {
       const handler = (_e: IpcRendererEvent, payload: { event: CalendarEvent }) => cb(payload);
       ipcRenderer.on('calendar:notify-clicked', handler);
       return () => ipcRenderer.removeListener('calendar:notify-clicked', handler);
+    },
+    onAutoRecordStart: (cb: (payload: { event: CalendarEvent }) => void) => {
+      const handler = (_e: IpcRendererEvent, payload: { event: CalendarEvent }) => cb(payload);
+      ipcRenderer.on('calendar:auto-record-start', handler);
+      return () => ipcRenderer.removeListener('calendar:auto-record-start', handler);
     }
   },
   mini: {

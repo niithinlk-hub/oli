@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { CalendarEvent } from '@shared/types';
 import { OliIcon } from '../components/brand/OliIcon';
 import { useMeetingsStore } from '../store/meetings';
 
@@ -7,6 +8,7 @@ interface Props {
   onOpenEmail: () => void;
   onOpenSettings: () => void;
   onOpenBrand: () => void;
+  onOpenCalendar: () => void;
 }
 
 function timeOfDayGreeting(d = new Date()): string {
@@ -26,15 +28,36 @@ function todayStr(d = new Date()): string {
   });
 }
 
-export function Home({ onOpenMeeting, onOpenEmail, onOpenSettings, onOpenBrand }: Props) {
+export function Home({
+  onOpenMeeting,
+  onOpenEmail,
+  onOpenSettings,
+  onOpenBrand,
+  onOpenCalendar
+}: Props) {
   const meetings = useMeetingsStore((s) => s.meetings);
   const refresh = useMeetingsStore((s) => s.refresh);
   const select = useMeetingsStore((s) => s.select);
   const createMeeting = useMeetingsStore((s) => s.createMeeting);
   const [userName] = useState<string>('there');
+  const [todayEvents, setTodayEvents] = useState<CalendarEvent[]>([]);
+  const [hasSubs, setHasSubs] = useState<boolean | null>(null);
 
   useEffect(() => {
     void refresh();
+    const refreshCal = async () => {
+      const [evts, subs] = await Promise.all([
+        window.floyd.calendar.forDay(Date.now()),
+        window.floyd.calendar.subs.list()
+      ]);
+      setTodayEvents(evts);
+      setHasSubs(subs.length > 0);
+    };
+    void refreshCal();
+    const off = window.floyd.calendar.onUpdated(() => void refreshCal());
+    return () => {
+      off();
+    };
   }, [refresh]);
 
   const recent = meetings.slice(0, 4);
@@ -90,7 +113,51 @@ export function Home({ onOpenMeeting, onOpenEmail, onOpenSettings, onOpenBrand }
           </p>
         </div>
 
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-5 w-full max-w-3xl">
+        {/* Today row */}
+        <div className="mt-8 w-full max-w-5xl">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-caption uppercase tracking-wider text-ink-muted">Today</p>
+            <button
+              onClick={onOpenCalendar}
+              className="text-caption text-oli-blue hover:underline"
+            >
+              Open calendar →
+            </button>
+          </div>
+          {todayEvents.length === 0 ? (
+            <div className="rounded-card border border-line bg-white px-4 py-3 text-body-sm text-ink-muted">
+              {hasSubs === false ? (
+                <>
+                  No calendar connected.{' '}
+                  <button
+                    onClick={onOpenSettings}
+                    className="text-oli-blue underline"
+                  >
+                    Connect a calendar →
+                  </button>
+                </>
+              ) : (
+                'Nothing on the calendar today.'
+              )}
+            </div>
+          ) : (
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {todayEvents.map((ev) => (
+                <EventCard
+                  key={ev.id}
+                  ev={ev}
+                  onRecord={async () => {
+                    const m = await createMeeting(ev.title);
+                    select(m.id);
+                    onOpenMeeting();
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-5 w-full max-w-3xl">
           <TabCard
             title="Meeting recorder"
             tagline="Record · transcribe · enhance"
@@ -140,6 +207,31 @@ export function Home({ onOpenMeeting, onOpenEmail, onOpenSettings, onOpenBrand }
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+function EventCard({ ev, onRecord }: { ev: CalendarEvent; onRecord: () => void }) {
+  const time = new Date(ev.startsAt).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+  return (
+    <div className="shrink-0 w-72 rounded-card border border-line bg-white shadow-card p-4">
+      <p className="text-caption uppercase tracking-wider text-ink-muted">{time}</p>
+      <p className="text-body-sm font-semibold mt-1 truncate">{ev.title}</p>
+      {ev.attendees.length > 0 && (
+        <p className="text-caption text-ink-muted truncate mt-0.5">
+          {ev.attendees.length} attendee{ev.attendees.length === 1 ? '' : 's'}
+        </p>
+      )}
+      <button
+        onClick={onRecord}
+        className="mt-3 w-full px-3 py-1.5 rounded-button text-btn text-white"
+        style={{ background: 'var(--oli-gradient-primary)' }}
+      >
+        Record →
+      </button>
     </div>
   );
 }
