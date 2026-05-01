@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMeetingsStore } from '../../store/meetings';
 import { useUiPrefs } from '../../store/uiPrefs';
 
-type View = 'home' | 'meeting' | 'email' | 'calendar' | 'settings' | 'brand';
+type View = 'home' | 'meeting' | 'email' | 'calendar' | 'ask' | 'settings' | 'brand';
 
 interface Props {
   open: boolean;
@@ -141,6 +141,8 @@ export function CommandPalette({ open, onClose, onSwitchView }: Props) {
                         onSwitchView('home');
                       } else if (a.id === 'action.go-calendar') {
                         onSwitchView('calendar');
+                      } else if (a.id === 'action.go-ask') {
+                        onSwitchView('ask');
                       } else if (a.id === 'action.go-settings') {
                         onSwitchView('settings');
                       } else if (a.id.startsWith('llm:')) {
@@ -183,6 +185,7 @@ function buildActions(
     { id: 'action.new-email', title: 'New email rephrase', hint: 'Open email rephraser' },
     { id: 'action.go-home', title: 'Open home' },
     { id: 'action.go-calendar', title: 'Open calendar' },
+    { id: 'action.go-ask', title: 'Ask my meetings', hint: 'Semantic chat over corpus' },
     { id: 'action.go-settings', title: 'Open settings' }
   ];
   for (const p of providers) {

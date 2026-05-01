@@ -251,6 +251,193 @@ async function complete(args: CompleteArgs): Promise<string> {
   throw new Error(`unknown provider: ${provider}`);
 }
 
+/* ─── Structured extraction (Phase 3.2) ──────────────────────────────── */
+
+import { z } from 'zod';
+
+export const StructuredOutput = z.object({
+  summary: z.string(),
+  decisions: z
+    .array(
+      z.object({
+        text: z.string(),
+        segmentRef: z.number().int().nullable().optional()
+      })
+    )
+    .default([]),
+  actionItems: z
+    .array(
+      z.object({
+        owner: z.string().nullable().optional().default(null),
+        task: z.string(),
+        due: z.string().nullable().optional().default(null),
+        segmentRef: z.number().int().nullable().optional().default(null)
+      })
+    )
+    .default([]),
+  topics: z.array(z.string()).default([])
+});
+export type StructuredOutput = z.infer<typeof StructuredOutput>;
+
+const STRUCTURED_SYSTEM = `You are a meeting analyst. Extract a JSON object with the following exact schema:
+{
+  "summary": "2-4 sentence overview",
+  "decisions": [{ "text": "...", "segmentRef": null }],
+  "actionItems": [{ "owner": "name or null", "task": "...", "due": "ISO date or null", "segmentRef": null }],
+  "topics": ["topic1", "topic2"]
+}
+Rules:
+- "decisions" = concrete decisions made, not opinions
+- "actionItems" = concrete tasks with owners if stated. Owner = null if unclear.
+- "due" = ISO date string if explicitly stated; null otherwise. Don't guess.
+- "topics" = 3-7 short topic labels (1-3 words each).
+- Output ONLY valid JSON. No prose, no markdown fences, no commentary.`;
+
+interface ExtractStructuredArgs {
+  meetingTitle: string;
+  transcript: string;
+  userNotesMarkdown: string;
+}
+
+export async function extractStructured(
+  args: ExtractStructuredArgs
+): Promise<StructuredOutput> {
+  const provider = getActiveProvider();
+  const key = await getProviderKey(provider);
+  if (!key) throw new LlmNotConfiguredError(provider);
+  const model = activeModel(provider);
+  const transcript = truncate(args.transcript);
+  const userMessage = `Meeting: ${args.meetingTitle}
+
+Notes (markdown):
+"""
+${args.userNotesMarkdown || '(none)'}
+"""
+
+Transcript:
+"""
+${transcript}
+"""
+
+Return the JSON now.`;
+
+  let raw = '';
+
+  if (provider === 'openai') {
+    const r = await new OpenAI({ apiKey: key }).chat.completions.create({
+      model,
+      temperature: 0.1,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: STRUCTURED_SYSTEM },
+        { role: 'user', content: userMessage }
+      ]
+    });
+    raw = r.choices[0]?.message?.content ?? '';
+  } else if (provider === 'anthropic') {
+    const r = await new Anthropic({ apiKey: key }).messages.create({
+      model,
+      max_tokens: 4096,
+      temperature: 0.1,
+      system: STRUCTURED_SYSTEM + '\n\nReply with ONLY a single JSON object — no prose.',
+      messages: [{ role: 'user', content: userMessage }]
+    });
+    raw = r.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+  } else if (provider === 'gemini') {
+    const m = new GoogleGenerativeAI(key).getGenerativeModel({
+      model,
+      systemInstruction: STRUCTURED_SYSTEM,
+      generationConfig: {
+        temperature: 0.1,
+        responseMimeType: 'application/json',
+        maxOutputTokens: 4096
+      }
+    });
+    const r = await m.generateContent(userMessage);
+    raw = r.response.text();
+  } else if (provider === 'groq') {
+    const r = await new Groq({ apiKey: key }).chat.completions.create({
+      model,
+      temperature: 0.1,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: STRUCTURED_SYSTEM },
+        { role: 'user', content: userMessage }
+      ]
+    });
+    raw = r.choices[0]?.message?.content ?? '';
+  }
+
+  // Strip code fences if a model snuck them in despite the prompt.
+  raw = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '');
+
+  const parseOnce = (): StructuredOutput | null => {
+    try {
+      const j = JSON.parse(raw);
+      return StructuredOutput.parse(j);
+    } catch {
+      return null;
+    }
+  };
+
+  const out = parseOnce();
+  if (out) return out;
+
+  // One retry with explicit "JSON only" reminder.
+  const retry = await complete({
+    systemPrompt:
+      STRUCTURED_SYSTEM +
+      '\n\nThe last response was unparseable. Return ONLY the JSON object now.',
+    userMessage,
+    temperature: 0
+  });
+  raw = retry.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '');
+  const second = parseOnce();
+  if (second) return second;
+  throw new Error('LLM did not return parseable JSON');
+}
+
+/* ─── Embeddings (Phase 3.3) ──────────────────────────────────────────── */
+
+export type EmbedProvider = 'openai-small' | 'openai-large';
+
+const EMBED_MODEL_MAP: Record<EmbedProvider, { model: string; dim: number }> = {
+  'openai-small': { model: 'text-embedding-3-small', dim: 1536 },
+  'openai-large': { model: 'text-embedding-3-large', dim: 3072 }
+};
+
+export function embedDimensions(provider: EmbedProvider): number {
+  return EMBED_MODEL_MAP[provider].dim;
+}
+
+export function embedModelName(provider: EmbedProvider): string {
+  return EMBED_MODEL_MAP[provider].model;
+}
+
+/**
+ * Batch embed. Reuses the OpenAI key (most users already have one). Falls
+ * back to throwing LlmNotConfiguredError if absent. We don't run embeddings
+ * via Anthropic/Gemini/Groq — none of them ship cheap general-purpose embed
+ * APIs at the time of writing.
+ */
+export async function embedBatch(
+  texts: string[],
+  provider: EmbedProvider = 'openai-small'
+): Promise<number[][]> {
+  if (texts.length === 0) return [];
+  const key = await getProviderKey('openai');
+  if (!key) throw new LlmNotConfiguredError('openai');
+  const client = new OpenAI({ apiKey: key });
+  const r = await client.embeddings.create({
+    model: EMBED_MODEL_MAP[provider].model,
+    input: texts
+  });
+  return r.data.map((d) => d.embedding);
+}
+
 interface EnhanceArgs {
   systemPrompt: string;
   transcript: string;

@@ -7,6 +7,7 @@ import { TemplatePicker } from '../components/TemplatePicker';
 import { AskOliChat } from '../components/AskOliChat';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { RadialRecorder } from '../components/recorder/RadialRecorder';
+import { ActionItemsTab } from '../components/ActionItemsTab';
 import { useMeetingsStore } from '../store/meetings';
 import { useUiPrefs } from '../store/uiPrefs';
 import { renderMarkdown } from '../utils/markdown';
@@ -16,7 +17,7 @@ interface Props {
   meetingId: string;
 }
 
-type RightTab = 'notes' | 'ask';
+type RightTab = 'notes' | 'actions' | 'ask';
 
 function fmt(ms: number): string {
   const total = Math.floor(ms / 1000);
@@ -36,6 +37,7 @@ export function MeetingDetail({ meetingId }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [primary, setPrimary] = useState<'transcript' | 'notes'>('transcript');
+  const [speakerNames, setSpeakerNames] = useState<Record<string, string>>({});
   const [audioPos, setAudioPos] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioPlaying, setAudioPlaying] = useState(false);
@@ -64,6 +66,11 @@ export function MeetingDetail({ meetingId }: Props) {
     setTab('notes');
     setEnhanceError(null);
     setExportMessage(null);
+    void window.floyd.ai.diar.listSpeakers(meetingId).then((rows) => {
+      const map: Record<string, string> = {};
+      for (const r of rows) map[r.rawLabel] = r.displayName;
+      setSpeakerNames(map);
+    });
   }, [meetingId, refreshAll]);
 
   useEffect(() => {
@@ -289,17 +296,38 @@ export function MeetingDetail({ meetingId }: Props) {
               </div>
             ) : (
               transcript.map((s, i) => (
-                <button
+                <div
                   key={`${s.id}-${i}`}
                   data-segment-id={s.id}
-                  onClick={() => seekTo(s.startMs)}
-                  className="block text-left w-full mb-2 text-body-sm leading-relaxed rounded px-1 hover:bg-surface-cloud transition"
+                  className="mb-2 text-body-sm leading-relaxed rounded px-1 hover:bg-surface-cloud transition"
                 >
-                  <span className="font-mono text-caption text-ink-muted mr-2 tabular-nums">
-                    {fmt(s.startMs)}
-                  </span>
-                  <span className="text-ink-primary">{s.text}</span>
-                </button>
+                  {s.speakerLabel && (
+                    <button
+                      onClick={async () => {
+                        const next = window.prompt(
+                          `Rename ${s.speakerLabel} to:`,
+                          speakerNames[s.speakerLabel!] ?? s.speakerLabel!
+                        );
+                        if (next && next.trim()) {
+                          await window.floyd.ai.diar.rename(meetingId, s.speakerLabel!, next.trim());
+                          setSpeakerNames((prev) => ({ ...prev, [s.speakerLabel!]: next.trim() }));
+                        }
+                      }}
+                      className="text-caption px-1.5 py-0.5 rounded mr-2 font-medium bg-oli-blue/15 text-oli-blue hover:opacity-80"
+                    >
+                      {speakerNames[s.speakerLabel] ?? s.speakerLabel}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => seekTo(s.startMs)}
+                    className="text-left"
+                  >
+                    <span className="font-mono text-caption text-ink-muted mr-2 tabular-nums">
+                      {fmt(s.startMs)}
+                    </span>
+                    <span className="text-ink-primary">{s.text}</span>
+                  </button>
+                </div>
               ))
             )}
           </div>
@@ -311,6 +339,9 @@ export function MeetingDetail({ meetingId }: Props) {
             <div className="flex items-center gap-1 rounded-button bg-surface-cloud p-1">
               <TabBtn active={tab === 'notes'} onClick={() => setTab('notes')}>
                 Notes
+              </TabBtn>
+              <TabBtn active={tab === 'actions'} onClick={() => setTab('actions')}>
+                ✓ Actions
               </TabBtn>
               <TabBtn active={tab === 'ask'} onClick={() => setTab('ask')}>
                 ✦ Ask Oli
@@ -369,6 +400,14 @@ export function MeetingDetail({ meetingId }: Props) {
                 </div>
               )}
             </div>
+          ) : tab === 'actions' ? (
+            <ActionItemsTab
+              meetingId={meetingId}
+              onSeek={(segId) => {
+                const seg = transcript.find((s) => s.id === segId);
+                if (seg) seekTo(seg.startMs);
+              }}
+            />
           ) : (
             <AskOliChat meetingId={meetingId} />
           )}

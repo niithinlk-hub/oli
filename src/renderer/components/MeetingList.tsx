@@ -11,6 +11,7 @@ interface Props {
   onOpenSearch?: () => void;
   onOpenEmail?: () => void;
   onOpenCalendar?: () => void;
+  onOpenAsk?: () => void;
   upcomingSlot?: React.ReactNode;
 }
 
@@ -31,6 +32,7 @@ export function MeetingList({
   onOpenSearch,
   onOpenEmail,
   onOpenCalendar,
+  onOpenAsk,
   upcomingSlot
 }: Props) {
   const { meetings, selectedId, refresh, select, createMeeting } = useMeetingsStore();
@@ -62,6 +64,7 @@ export function MeetingList({
         <RailBtn icon="⌕" title="Search (Ctrl+K)" onClick={onOpenSearch} />
         <RailBtn icon="🎙" title="New meeting (Ctrl+N)" onClick={handleNew} />
         <RailBtn icon="📅" title="Calendar" onClick={onOpenCalendar} />
+        <RailBtn icon="✦" title="Ask my meetings" onClick={onOpenAsk} />
         <RailBtn icon="✉" title="Email rephraser" onClick={onOpenEmail} />
         <RailBtn icon="⚙" title="Settings" onClick={onOpenSettings} />
         <div className="flex-1" />
@@ -118,6 +121,15 @@ export function MeetingList({
               title="Calendar"
             >
               📅 Calendar
+            </button>
+          )}
+          {onOpenAsk && (
+            <button
+              onClick={onOpenAsk}
+              className="text-caption px-2 py-1.5 rounded-md text-ink-secondary hover:bg-surface-cloud"
+              title="Ask my meetings"
+            >
+              ✦ Ask
             </button>
           )}
           {onOpenEmail && (

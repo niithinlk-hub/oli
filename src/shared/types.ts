@@ -20,6 +20,7 @@ export interface TranscriptSegment {
   endMs: number;
   text: string;
   source: 'system' | 'mic' | 'mixed';
+  speakerLabel?: string | null;
 }
 
 export interface NoteDoc {
