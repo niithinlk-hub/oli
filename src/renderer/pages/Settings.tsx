@@ -4,6 +4,7 @@ import { OliLogoHorizontal } from '../components/brand/OliLogoHorizontal';
 import { AiProviderSection } from '../components/AiProviderSection';
 import { SttProviderSection } from '../components/SttProviderSection';
 import { WhisperModelSection } from '../components/WhisperModelSection';
+import { CalendarSubscriptionsSection } from '../components/CalendarSubscriptionsSection';
 
 export function Settings({ onClose }: { onClose: () => void }) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -139,6 +140,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <AiProviderSection />
         <SttProviderSection />
         <WhisperModelSection />
+        <CalendarSubscriptionsSection />
 
         <Section
           title="Google Calendar"

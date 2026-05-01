@@ -5,6 +5,10 @@ import {
   fetchUpcomingEvents as outlookFetch
 } from './outlook';
 import { calendarEventsRepo } from './repo';
+import { calendarSubscriptionsRepo } from './subscriptions';
+import { syncIcsSubscription } from './icsSubscription';
+import { syncOutlookCom } from './outlookCom';
+import { startFolderWatchers, setFolderWatcherCallback } from './icsFolderWatch';
 import type { CalendarEvent } from '@shared/types';
 
 const POLL_INTERVAL_MS = 5 * 60_000;
@@ -46,6 +50,25 @@ async function pollOnce(): Promise<void> {
   } catch (err) {
     console.warn('outlook poll failed:', (err as Error).message);
   }
+
+  // Phase 2 subscriptions: ICS URLs + Outlook COM. Folder watcher pushes
+  // events out-of-band via chokidar; poller doesn't drive it.
+  for (const sub of calendarSubscriptionsRepo.list().filter((s) => s.enabled)) {
+    const dueAt = (sub.lastSyncedAt ?? 0) + sub.pollMinutes * 60_000;
+    if (dueAt > Date.now()) continue;
+    try {
+      if (sub.kind === 'ics-url') {
+        const r = await syncIcsSubscription(sub);
+        if (r.ok) touched = true;
+      } else if (sub.kind === 'outlook-com') {
+        const r = await syncOutlookCom(sub);
+        if (r.ok) touched = true;
+      }
+    } catch (err) {
+      console.warn(`subscription ${sub.id} (${sub.kind}) poll failed:`, (err as Error).message);
+    }
+  }
+
   if (touched) broadcast('calendar:updated', { at: Date.now() });
 }
 
@@ -83,6 +106,8 @@ function fireMeetingNotification(ev: CalendarEvent): void {
 
 export function startCalendarPoller(): void {
   if (pollTimer) return;
+  setFolderWatcherCallback(() => broadcast('calendar:updated', { at: Date.now() }));
+  void startFolderWatchers();
   void pollOnce().then(scheduleNotifications);
   pollTimer = setInterval(async () => {
     await pollOnce();

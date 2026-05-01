@@ -6,6 +6,7 @@ import { MeetingDetail } from './pages/MeetingDetail';
 import { Settings } from './pages/Settings';
 import { Brand } from './pages/Brand';
 import { Home } from './pages/Home';
+import { Calendar } from './pages/Calendar';
 import { EmailRephraser } from './pages/EmailRephraser';
 import { Onboarding, shouldShowOnboarding } from './pages/Onboarding';
 import { UpcomingEvents } from './components/UpcomingEvents';
@@ -16,7 +17,7 @@ import { useMeetingsStore } from './store/meetings';
 import { useUiPrefs } from './store/uiPrefs';
 import { OliLogoStacked } from './components/brand/OliLogoStacked';
 
-type View = 'home' | 'meeting' | 'email' | 'settings' | 'brand';
+type View = 'home' | 'meeting' | 'email' | 'calendar' | 'settings' | 'brand';
 
 export default function App() {
   const selectedId = useMeetingsStore((s) => s.selectedId);
@@ -89,6 +90,22 @@ export default function App() {
     };
   }, []);
 
+  // Calendar-driven auto-record: main fires `calendar:auto-record-start` with
+  // an event payload. We create a meeting on the fly and switch to its view.
+  // The user clicks Record in MeetingDetail (or RadialRecorder) to actually
+  // start capturing — Phase 2.5 prompt mode lands here too; auto mode just
+  // routes faster.
+  useEffect(() => {
+    const off = window.floyd.calendar.onAutoRecordStart(async (payload) => {
+      const m = await useMeetingsStore.getState().createMeeting(payload.event.title);
+      useMeetingsStore.getState().select(m.id);
+      setView('meeting');
+    });
+    return () => {
+      off();
+    };
+  }, []);
+
   // Forward amplitude bars to mini window (cheap, only when mini is open).
   useEffect(() => {
     let lastSent = 0;
@@ -134,6 +151,7 @@ export default function App() {
           onOpenEmail={() => setView('email')}
           onOpenSettings={() => setView('settings')}
           onOpenBrand={() => setView('brand')}
+          onOpenCalendar={() => setView('calendar')}
         />
         {showOnboarding && <Onboarding onClose={() => setShowOnboarding(false)} />}
         <CommandPalette
@@ -166,6 +184,23 @@ export default function App() {
     );
   }
 
+  if (view === 'calendar') {
+    return (
+      <div className="h-screen bg-surface-cloud text-ink-primary">
+        <Calendar
+          onHome={() => setView('home')}
+          onOpenMeeting={() => setView('meeting')}
+          onOpenSettings={() => setView('settings')}
+        />
+        <CommandPalette
+          open={paletteOpen}
+          onClose={() => setPaletteOpen(false)}
+          onSwitchView={setView}
+        />
+      </div>
+    );
+  }
+
   // Sidebar pixel width as percentage relative to viewport so the panel API
   // can use sizes in %. Recompute on every render — cheap.
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1320;
@@ -189,6 +224,7 @@ export default function App() {
             onOpenBrand={() => setView('brand')}
             onOpenSearch={() => setPaletteOpen(true)}
             onOpenEmail={() => setView('email')}
+            onOpenCalendar={() => setView('calendar')}
             upcomingSlot={sidebarMode === 'expanded' ? <UpcomingEvents /> : undefined}
           />
         </Panel>

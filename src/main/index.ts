@@ -23,6 +23,8 @@ import { registerCalendarIpc } from './ipc/calendar';
 import { registerExportIpc } from './ipc/export';
 import { seedBuiltInTemplates } from './llm/templates';
 import { startCalendarPoller, stopCalendarPoller } from './calendar/poller';
+import { startAutoRecordScheduler, stopAutoRecordScheduler } from './calendar/autoRecord';
+import { stopFolderWatchers } from './calendar/icsFolderWatch';
 import { initTray, destroyTray, setTrayOpenHandler } from './tray';
 import { initAutoUpdate, checkForUpdatesNow } from './auto-update';
 import { buildAppMenu } from './menu';
@@ -134,6 +136,7 @@ app.whenReady().then(() => {
     }
   });
   startCalendarPoller();
+  startAutoRecordScheduler();
   initAutoUpdate(win);
 
   // Global record toggle hotkey. Sends `menu:toggle-record` to whichever
@@ -161,6 +164,8 @@ app.on('activate', () => {
 
 app.on('before-quit', () => {
   stopCalendarPoller();
+  stopAutoRecordScheduler();
+  void stopFolderWatchers();
   destroyTray();
   globalShortcut.unregisterAll();
 });
