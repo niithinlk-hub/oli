@@ -23,6 +23,7 @@ export class StreamingTranscriber {
   private cancelled = false;
   private warnedNotConfigured = false;
   private maxConcurrent: number;
+  private inflightControllers = new Set<AbortController>();
 
   constructor(private cb: StreamingTranscriberCallbacks) {
     this.maxConcurrent = Math.max(1, getConcurrency());
@@ -42,6 +43,10 @@ export class StreamingTranscriber {
   cancel(): void {
     this.cancelled = true;
     this.queue = [];
+    // Abort in-flight transcriptions so their whisper-cli children are killed
+    // instead of running to completion (CPU thrash) after a stop.
+    for (const c of this.inflightControllers) c.abort();
+    this.inflightControllers.clear();
   }
 
   private tick(): void {
@@ -60,13 +65,16 @@ export class StreamingTranscriber {
   }
 
   private async runOne(window: ChunkWindow): Promise<void> {
+    const ctrl = new AbortController();
+    this.inflightControllers.add(ctrl);
     try {
-      const segs = await transcribeWav({
-        wavPath: window.filePath,
-        offsetMs: window.startMs
-      });
+      const segs = await transcribeWav(
+        { wavPath: window.filePath, offsetMs: window.startMs },
+        ctrl.signal
+      );
       if (!this.cancelled) this.cb.onSegments(window, segs);
     } catch (err) {
+      if (ctrl.signal.aborted) return; // cancelled mid-flight — discard quietly
       if (err instanceof WhisperNotConfiguredError || err instanceof SttNotConfiguredError) {
         if (!this.warnedNotConfigured) {
           console.warn('STT not configured — skipping live transcription:', (err as Error).message);
@@ -75,6 +83,8 @@ export class StreamingTranscriber {
         return;
       }
       this.cb.onError(window, err as Error);
+    } finally {
+      this.inflightControllers.delete(ctrl);
     }
   }
 }

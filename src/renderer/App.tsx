@@ -77,9 +77,12 @@ export default function App() {
   // means the pipeline is active, regardless of whether mic+loopback are
   // both muted.
   const isRecordingRef = useRef(false);
+  const recordingStartedAtRef = useRef<number | null>(null);
   useEffect(() => {
     const unsub = useMeetingsStore.subscribe((s) => {
-      isRecordingRef.current = s.meetings.some((m) => m.status === 'recording');
+      const rec = s.meetings.find((m) => m.status === 'recording');
+      isRecordingRef.current = !!rec;
+      recordingStartedAtRef.current = rec?.startedAt ?? null;
     });
     return () => unsub();
   }, []);
@@ -87,6 +90,18 @@ export default function App() {
   useEffect(() => {
     const off = window.floyd.mini.onRequestOpenOnHide(() => {
       void window.floyd.mini.openIfRecording(isRecordingRef.current);
+    });
+    return () => {
+      off();
+    };
+  }, []);
+
+  // Track mini-recorder open state so we only forward amplitude over IPC while
+  // the mini window (its only consumer) is actually open.
+  const isMiniOpenRef = useRef(false);
+  useEffect(() => {
+    const off = window.floyd.mini.onOpenChanged((open) => {
+      isMiniOpenRef.current = open;
     });
     return () => {
       off();
@@ -113,12 +128,18 @@ export default function App() {
   useEffect(() => {
     let lastSent = 0;
     const unsub = useAmplitude.subscribe((s) => {
+      if (!isMiniOpenRef.current) return; // mini closed → nobody listening, skip IPC
       const now = Date.now();
       // Throttle to ~30fps to avoid IPC flooding.
       if (now - lastSent < 33) return;
       lastSent = now;
       const bars = s.micBars.map((m, i) => Math.max(m, s.loopbackBars[i] ?? 0));
-      window.floyd.mini.sendAmplitude({ mic: s.micRms, loopback: s.loopbackRms, bars });
+      window.floyd.mini.sendAmplitude({
+        mic: s.micRms,
+        loopback: s.loopbackRms,
+        bars,
+        startedAt: recordingStartedAtRef.current ?? undefined
+      });
     });
     return () => unsub();
   }, []);

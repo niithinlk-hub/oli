@@ -26,10 +26,21 @@ export function isMiniRecorderOpen(): boolean {
   return miniWin !== null && !miniWin.isDestroyed();
 }
 
+/**
+ * Tell every window whether the mini recorder is open, so the main window can
+ * stop forwarding ~30 amplitude pings/sec over IPC when nobody is listening.
+ */
+function broadcastOpenState(open: boolean): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send('mini:open-changed', open);
+  }
+}
+
 export function showMiniRecorder(): BrowserWindow {
   if (isMiniRecorderOpen()) {
     miniWin!.show();
     miniWin!.focus();
+    broadcastOpenState(true);
     return miniWin!;
   }
 
@@ -75,6 +86,7 @@ export function showMiniRecorder(): BrowserWindow {
     miniWin = null;
   });
 
+  broadcastOpenState(true);
   return miniWin;
 }
 
@@ -83,6 +95,7 @@ export function closeMiniRecorder(): void {
     miniWin!.close();
     miniWin = null;
   }
+  broadcastOpenState(false);
 }
 
 export function broadcastToMini<T>(channel: string, payload: T): void {

@@ -421,12 +421,20 @@ const api = {
       ipcRenderer.invoke('mini:openIfRecording', recording),
     /** Mini window's stop button. */
     toggleRecord: (): void => ipcRenderer.send('mini:toggle-record'),
-    /** Forward an amplitude tick from the main window into the mini renderer. */
-    sendAmplitude: (payload: { mic: number; loopback: number; bars: number[] }): void =>
-      ipcRenderer.send('mini:amplitude', payload),
-    onAmplitude: (cb: (p: { mic: number; loopback: number; bars: number[] }) => void) => {
-      const handler = (_e: IpcRendererEvent, p: { mic: number; loopback: number; bars: number[] }) =>
-        cb(p);
+    /** Forward an amplitude tick (+ recording start time) into the mini renderer. */
+    sendAmplitude: (payload: {
+      mic: number;
+      loopback: number;
+      bars: number[];
+      startedAt?: number;
+    }): void => ipcRenderer.send('mini:amplitude', payload),
+    onAmplitude: (
+      cb: (p: { mic: number; loopback: number; bars: number[]; startedAt?: number }) => void
+    ) => {
+      const handler = (
+        _e: IpcRendererEvent,
+        p: { mic: number; loopback: number; bars: number[]; startedAt?: number }
+      ) => cb(p);
       ipcRenderer.on('mini:amplitude', handler);
       return () => ipcRenderer.removeListener('mini:amplitude', handler);
     },
@@ -434,6 +442,12 @@ const api = {
       const handler = () => cb();
       ipcRenderer.on('app:request-mini-on-hide', handler);
       return () => ipcRenderer.removeListener('app:request-mini-on-hide', handler);
+    },
+    /** Main broadcasts mini open/close so the main window can gate amplitude IPC. */
+    onOpenChanged: (cb: (open: boolean) => void) => {
+      const handler = (_e: IpcRendererEvent, open: boolean) => cb(open);
+      ipcRenderer.on('mini:open-changed', handler);
+      return () => ipcRenderer.removeListener('mini:open-changed', handler);
     }
   },
   app: {
