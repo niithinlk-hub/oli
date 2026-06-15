@@ -24,9 +24,11 @@ export function registerMeetingIpc() {
       console.warn(`failed to remove recordings dir ${dir}:`, (err as Error).message);
     }
   });
-  ipcMain.handle('meetings:search', (_e, q: string) =>
-    q.trim().length === 0 ? [] : meetingsRepo.search(q.trim())
-  );
+  ipcMain.handle('meetings:search', (_e, q: string) => {
+    const query = (q ?? '').trim();
+    if (query.length === 0) return [];
+    return meetingsRepo.search(query.slice(0, 200));
+  });
 
   ipcMain.handle('transcript:list', (_e, meetingId: string) => transcriptRepo.list(meetingId));
 

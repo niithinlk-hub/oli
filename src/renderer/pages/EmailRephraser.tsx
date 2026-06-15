@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { OliIcon } from '../components/brand/OliIcon';
 
 type Tone =
@@ -51,24 +51,33 @@ export function EmailRephraser({ onHome, onOpenSettings }: Props) {
     void window.floyd.llm.getActiveProvider().then(setActiveProvider);
   }, []);
 
+  // Synchronous re-entrancy guard. Two Ctrl+Enter handlers can fire for one
+  // keypress (the button's onKeyDown + the global shortcut) before setBusy(true)
+  // commits, so the React `busy` state alone can't stop a double LLM call.
+  const runningRef = useRef(false);
   const run = async () => {
-    if (!original.trim() || busy) return;
+    if (runningRef.current || !original.trim() || busy) return;
+    runningRef.current = true;
     setBusy(true);
     setMessage(null);
     setOutput('');
     setCopyOk(false);
-    const res = await window.floyd.llm.rephraseEmail({
-      originalText: original,
-      tone,
-      intent,
-      contextNote: contextNote.trim() || undefined
-    });
-    if (res.ok && res.text) {
-      setOutput(res.text);
-    } else {
-      setMessage(res.message ?? 'Something went wrong.');
+    try {
+      const res = await window.floyd.llm.rephraseEmail({
+        originalText: original,
+        tone,
+        intent,
+        contextNote: contextNote.trim() || undefined
+      });
+      if (res.ok && res.text) {
+        setOutput(res.text);
+      } else {
+        setMessage(res.message ?? 'Something went wrong.');
+      }
+    } finally {
+      setBusy(false);
+      runningRef.current = false;
     }
-    setBusy(false);
   };
 
   const copy = async () => {
@@ -278,9 +287,6 @@ export function EmailRephraser({ onHome, onOpenSettings }: Props) {
               <button
                 onClick={run}
                 disabled={busy || !original.trim()}
-                onKeyDown={(e) => {
-                  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') void run();
-                }}
                 className="px-5 py-2 rounded-button text-btn text-white shadow-floating disabled:opacity-50"
                 style={{ background: 'var(--oli-gradient-primary)' }}
               >

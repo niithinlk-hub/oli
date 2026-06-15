@@ -107,6 +107,7 @@ export function registerLlmIpc(): void {
       try {
         const text = (args.originalText ?? '').trim();
         if (!text) return { ok: false, message: 'Please paste an email or draft first.' };
+        if (text.length > 50_000) return { ok: false, message: 'Text too long (50k character max).' };
         const out = await rephraseEmail({
           originalText: text,
           tone: args.tone,
@@ -129,6 +130,14 @@ export function registerLlmIpc(): void {
     ) => {
       const meeting = meetingsRepo.get(args.meetingId);
       if (!meeting) throw new Error(`meeting ${args.meetingId} not found`);
+      const question = (args.question ?? '').trim();
+      if (!question) return { ok: false, message: 'Ask a question first.' };
+      if (question.length > 8_000)
+        return { ok: false, message: 'Question too long (8k character max).' };
+      // Bound history fed back to the model: last 20 turns, each clamped.
+      const history = (args.history ?? [])
+        .slice(-20)
+        .map((h) => ({ role: h.role, content: (h.content ?? '').slice(0, 8_000) }));
       const segments = transcriptRepo.list(args.meetingId);
       const transcript = segments.map((s) => s.text).join('\n');
       const note = notesRepo.get(args.meetingId);
@@ -138,8 +147,8 @@ export function registerLlmIpc(): void {
           transcript,
           userNotesMarkdown: htmlToMarkdown(note?.rawMarkdown ?? ''),
           enhancedMarkdown: note?.enhancedMarkdown ?? null,
-          history: args.history,
-          question: args.question
+          history,
+          question
         });
         return { ok: true, markdown: md };
       } catch (err) {

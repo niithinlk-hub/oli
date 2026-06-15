@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import type { Meeting, NoteDoc, TranscriptSegment } from '@shared/types';
 import { RecordButton } from '../components/RecordButton';
@@ -41,10 +41,19 @@ export function MeetingDetail({ meetingId }: Props) {
   const [audioPos, setAudioPos] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioPlaying, setAudioPlaying] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
   const notesRef = useRef<{ flush: () => void }>({ flush: () => {} });
   const recordToggleRef = useRef<{ toggle: () => Promise<void> } | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Latest transcript + scroll-pin + speaker-name state held in refs so the
+  // seek/scroll/rename callbacks stay stable — memoized rows then don't
+  // invalidate on every streamed segment.
+  const transcriptRef = useRef<TranscriptSegment[]>([]);
+  const transcriptPinnedRef = useRef(true);
+  const speakerNamesRef = useRef<Record<string, string>>({});
+  speakerNamesRef.current = speakerNames;
   const isRecording = meeting?.status === 'recording';
   const elapsed = useElapsedSince(isRecording ? meeting!.startedAt : null);
   const deleteMeetingFromStore = useMeetingsStore((s) => s.deleteMeeting);
@@ -66,6 +75,7 @@ export function MeetingDetail({ meetingId }: Props) {
     setTab('notes');
     setEnhanceError(null);
     setExportMessage(null);
+    transcriptPinnedRef.current = true;
     void window.floyd.ai.diar.listSpeakers(meetingId).then((rows) => {
       const map: Record<string, string> = {};
       for (const r of rows) map[r.rawLabel] = r.displayName;
@@ -99,10 +109,21 @@ export function MeetingDetail({ meetingId }: Props) {
   }, [meetingId, refreshAll]);
 
   useEffect(() => {
-    transcriptScrollRef.current?.scrollTo({
-      top: transcriptScrollRef.current.scrollHeight,
-      behavior: 'smooth'
-    });
+    transcriptRef.current = transcript;
+  }, [transcript]);
+
+  // Auto-scroll only while the user is pinned to the bottom, and instantly (not
+  // smooth) so streaming captions don't restart an animation or yank the view
+  // back while the user has scrolled up to read.
+  const onTranscriptScroll = () => {
+    const el = transcriptScrollRef.current;
+    if (!el) return;
+    transcriptPinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
+  useEffect(() => {
+    if (!transcriptPinnedRef.current) return;
+    const el = transcriptScrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'auto' });
   }, [transcript.length]);
 
   // Audio playback: load mixed.wav via custom oli-audio:// protocol.
@@ -127,13 +148,22 @@ export function MeetingDetail({ meetingId }: Props) {
     };
   }, [meetingId, meeting?.audioPath]);
 
+  // Cheap seek for live scrubbing — only moves audio + position, no DOM work.
+  const scrubTo = useCallback((ms: number) => {
+    const a = audioRef.current;
+    if (!a) return;
+    a.currentTime = ms / 1000;
+    setAudioPos(ms);
+  }, []);
+
+  // Full seek (timestamp click / scrubber release): also scroll + pulse the
+  // matching segment. Reads transcript from a ref so the callback stays stable.
   const seekTo = useCallback((ms: number) => {
     const a = audioRef.current;
     if (!a) return;
     a.currentTime = ms / 1000;
     setAudioPos(ms);
-    // Highlight pulse on the segment near this timestamp.
-    const target = transcript.find((s) => s.startMs <= ms && ms <= s.endMs);
+    const target = transcriptRef.current.find((s) => s.startMs <= ms && ms <= s.endMs);
     if (target && transcriptScrollRef.current) {
       const node = transcriptScrollRef.current.querySelector(
         `[data-segment-id="${target.id}"]`
@@ -146,7 +176,7 @@ export function MeetingDetail({ meetingId }: Props) {
         node.classList.add('caption-pulse');
       }
     }
-  }, [transcript]);
+  }, []);
 
   const togglePlay = useCallback(() => {
     const a = audioRef.current;
@@ -154,6 +184,32 @@ export function MeetingDetail({ meetingId }: Props) {
     if (a.paused) void a.play();
     else a.pause();
   }, []);
+
+  const handleNotesSave = useCallback(
+    (html: string) => {
+      void window.floyd.notes.save(meetingId, html);
+    },
+    [meetingId]
+  );
+
+  // Non-blocking speaker rename (replaces window.prompt, which froze the
+  // renderer event loop and stalled live captions during the prompt).
+  const openRename = useCallback((rawLabel: string) => {
+    setRenameTarget(rawLabel);
+    setRenameValue(speakerNamesRef.current[rawLabel] ?? rawLabel);
+  }, []);
+
+  const submitRename = async () => {
+    const raw = renameTarget;
+    const next = renameValue.trim();
+    if (!raw || !next) {
+      setRenameTarget(null);
+      return;
+    }
+    await window.floyd.ai.diar.rename(meetingId, raw, next);
+    setSpeakerNames((prev) => ({ ...prev, [raw]: next }));
+    setRenameTarget(null);
+  };
 
   // \ key swaps which pane is primary (wider).
   useEffect(() => {
@@ -218,11 +274,11 @@ export function MeetingDetail({ meetingId }: Props) {
   };
 
   if (!meeting) {
-    return <div className="flex-1 flex items-center justify-center text-ink-muted">Loading…</div>;
+    return <div className="h-full flex items-center justify-center text-ink-muted">Loading…</div>;
   }
 
   return (
-    <section className="flex-1 flex flex-col bg-surface-cloud">
+    <section className="h-full flex flex-col bg-surface-cloud">
       <header className="titlebar-drag h-14 flex items-center justify-between gap-3 px-6 border-b border-line bg-white">
         <div className="flex items-center gap-3 min-w-0">
           <h2 className="text-h4 truncate">{meeting.title}</h2>
@@ -276,7 +332,11 @@ export function MeetingDetail({ meetingId }: Props) {
               </span>
             )}
           </div>
-          <div ref={transcriptScrollRef} className="flex-1 overflow-y-auto px-6 py-4">
+          <div
+            ref={transcriptScrollRef}
+            onScroll={onTranscriptScroll}
+            className="flex-1 overflow-y-auto px-6 py-4"
+          >
             {transcript.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
                 <RadialRecorder
@@ -296,38 +356,16 @@ export function MeetingDetail({ meetingId }: Props) {
               </div>
             ) : (
               transcript.map((s, i) => (
-                <div
+                <TranscriptRow
                   key={`${s.id}-${i}`}
-                  data-segment-id={s.id}
-                  className="mb-2 text-body-sm leading-relaxed rounded px-1 hover:bg-surface-cloud transition"
-                >
-                  {s.speakerLabel && (
-                    <button
-                      onClick={async () => {
-                        const next = window.prompt(
-                          `Rename ${s.speakerLabel} to:`,
-                          speakerNames[s.speakerLabel!] ?? s.speakerLabel!
-                        );
-                        if (next && next.trim()) {
-                          await window.floyd.ai.diar.rename(meetingId, s.speakerLabel!, next.trim());
-                          setSpeakerNames((prev) => ({ ...prev, [s.speakerLabel!]: next.trim() }));
-                        }
-                      }}
-                      className="text-caption px-1.5 py-0.5 rounded mr-2 font-medium bg-oli-blue/15 text-oli-blue hover:opacity-80"
-                    >
-                      {speakerNames[s.speakerLabel] ?? s.speakerLabel}
-                    </button>
-                  )}
-                  <button
-                    onClick={() => seekTo(s.startMs)}
-                    className="text-left"
-                  >
-                    <span className="font-mono text-caption text-ink-muted mr-2 tabular-nums">
-                      {fmt(s.startMs)}
-                    </span>
-                    <span className="text-ink-primary">{s.text}</span>
-                  </button>
-                </div>
+                  segId={s.id}
+                  startMs={s.startMs}
+                  text={s.text}
+                  speakerLabel={s.speakerLabel ?? null}
+                  speakerName={s.speakerLabel ? speakerNames[s.speakerLabel] ?? null : null}
+                  onSeek={seekTo}
+                  onRenameSpeaker={openRename}
+                />
               ))
             )}
           </div>
@@ -371,11 +409,11 @@ export function MeetingDetail({ meetingId }: Props) {
           )}
 
           {tab === 'notes' ? (
-            <div className="flex-1 min-h-0 grid grid-rows-[1fr_auto]">
+            <div className="flex-1 min-h-0 flex flex-col">
               <NotesEditor
                 key={meetingId}
                 initialContent={notes?.rawMarkdown ?? ''}
-                onSave={(html) => void window.floyd.notes.save(meetingId, html)}
+                onSave={handleNotesSave}
                 flushRef={notesRef}
               />
               {notes?.enhancedMarkdown && (
@@ -433,7 +471,8 @@ export function MeetingDetail({ meetingId }: Props) {
             min={0}
             max={Math.max(1, audioDuration)}
             value={Math.min(audioPos, audioDuration)}
-            onChange={(e) => seekTo(parseInt(e.target.value, 10))}
+            onChange={(e) => scrubTo(parseInt(e.target.value, 10))}
+            onPointerUp={(e) => seekTo(parseInt((e.target as HTMLInputElement).value, 10))}
             className="flex-1 oli-scrub"
           />
           <span className="font-mono text-caption text-ink-muted tabular-nums">
@@ -451,6 +490,51 @@ export function MeetingDetail({ meetingId }: Props) {
         </div>
       )}
 
+      {renameTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(7, 26, 51, 0.55)', backdropFilter: 'blur(6px)' }}
+          onClick={() => setRenameTarget(null)}
+        >
+          <div
+            className="w-[360px] max-w-[92vw] rounded-card bg-white shadow-floating p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-h4 font-display mb-1">Rename speaker</p>
+            <p className="text-caption text-ink-muted mb-3">
+              Relabel <span className="font-medium">{renameTarget}</span> across this transcript.
+            </p>
+            <input
+              autoFocus
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void submitRename();
+                if (e.key === 'Escape') setRenameTarget(null);
+              }}
+              placeholder="Display name"
+              className="w-full px-3 py-2 rounded-md border border-line bg-white text-body mb-4 outline-none focus:border-oli-blue/60"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setRenameTarget(null)}
+                className="px-3 py-2 rounded-button text-btn border border-line bg-white hover:bg-surface-cloud"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitRename}
+                disabled={!renameValue.trim()}
+                className="px-4 py-2 rounded-button text-btn text-white disabled:opacity-50"
+                style={{ background: 'var(--oli-gradient-primary)' }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ConfirmDialog
         open={confirmDelete}
         title="Delete this meeting?"
@@ -463,6 +547,46 @@ export function MeetingDetail({ meetingId }: Props) {
     </section>
   );
 }
+
+const TranscriptRow = memo(function TranscriptRow({
+  segId,
+  startMs,
+  text,
+  speakerLabel,
+  speakerName,
+  onSeek,
+  onRenameSpeaker
+}: {
+  segId: number;
+  startMs: number;
+  text: string;
+  speakerLabel: string | null;
+  speakerName: string | null;
+  onSeek: (ms: number) => void;
+  onRenameSpeaker: (rawLabel: string) => void;
+}) {
+  return (
+    <div
+      data-segment-id={segId}
+      className="mb-2 text-body-sm leading-relaxed rounded px-1 hover:bg-surface-cloud transition"
+    >
+      {speakerLabel && (
+        <button
+          onClick={() => onRenameSpeaker(speakerLabel)}
+          className="text-caption px-1.5 py-0.5 rounded mr-2 font-medium bg-oli-blue/15 text-oli-blue hover:opacity-80"
+        >
+          {speakerName ?? speakerLabel}
+        </button>
+      )}
+      <button onClick={() => onSeek(startMs)} className="text-left">
+        <span className="font-mono text-caption text-ink-muted mr-2 tabular-nums">
+          {fmt(startMs)}
+        </span>
+        <span className="text-ink-primary">{text}</span>
+      </button>
+    </div>
+  );
+});
 
 function ResizableSplit({
   children,

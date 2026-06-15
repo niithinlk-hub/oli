@@ -101,9 +101,10 @@ export const meetingsRepo = {
          FROM meetings m JOIN notes n ON n.meeting_id = m.id
          WHERE n.raw_markdown LIKE ? ESCAPE '\\' OR n.enhanced_markdown LIKE ? ESCAPE '\\'
          UNION
-         SELECT m.*, 'transcript' AS match_type, t.text AS snippet
+         SELECT m.*, 'transcript' AS match_type, MIN(t.text) AS snippet
          FROM meetings m JOIN transcript_segments t ON t.meeting_id = m.id
          WHERE t.text LIKE ? ESCAPE '\\'
+         GROUP BY m.id
          ORDER BY started_at DESC
          LIMIT ?`
       )

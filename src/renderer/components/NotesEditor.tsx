@@ -24,6 +24,18 @@ export function NotesEditor({
   placeholder = 'Type rough notes during the meeting — Oli will enhance them after.',
   flushRef
 }: Props) {
+  // Hold the latest callbacks in refs so the editor/update subscriptions don't
+  // depend on them — the parent (MeetingDetail) re-renders many times/sec during
+  // playback + recording and passes new inline onChange/onSave each time. With
+  // those in the dep array the effect cleanup clearTimeout()s the pending 1.5s
+  // auto-save on every re-render, so notes typed during playback never persist.
+  const onSaveRef = useRef(onSave);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onSaveRef.current = onSave;
+    onChangeRef.current = onChange;
+  });
+
   const editor = useEditor({
     extensions: [StarterKit, Placeholder.configure({ placeholder })],
     content: initialContent || '',
@@ -33,17 +45,17 @@ export function NotesEditor({
       }
     },
     onUpdate: ({ editor }) => {
-      onChange?.(editor.getHTML());
+      onChangeRef.current?.(editor.getHTML());
     }
   });
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!editor || !onSave) return;
+    if (!editor) return;
     const handler = () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
-        onSave(editor.getHTML());
+        onSaveRef.current?.(editor.getHTML());
       }, 1500);
     };
     editor.on('update', handler);
@@ -51,7 +63,7 @@ export function NotesEditor({
       editor.off('update', handler);
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [editor, onSave]);
+  }, [editor]);
 
   // Reset content when meeting changes (parent should remount, but guard anyway)
   useEffect(() => {
@@ -65,19 +77,19 @@ export function NotesEditor({
     if (!flushRef) return;
     flushRef.current = {
       flush: () => {
-        if (!editor || !onSave) return;
+        if (!editor) return;
         if (debounceRef.current) clearTimeout(debounceRef.current);
-        onSave(editor.getHTML());
+        onSaveRef.current?.(editor.getHTML());
       }
     };
-  }, [editor, onSave, flushRef]);
+  }, [editor, flushRef]);
 
   if (!editor) return null;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex-1 min-h-0 flex flex-col">
       <Toolbar editor={editor} />
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
         <EditorContent editor={editor} />
       </div>
     </div>

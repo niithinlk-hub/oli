@@ -185,7 +185,53 @@ export async function chat(args: CompleteArgs): Promise<string> {
   return complete(args);
 }
 
+/* ─── Transient-failure retry (429 / 5xx / network) ───────────────────── */
+
+function isRetryableError(err: unknown): boolean {
+  const e = err as { status?: number; code?: string; name?: string } | null;
+  const status = e?.status;
+  if (typeof status === 'number' && (status === 408 || status === 429 || status >= 500)) {
+    return true;
+  }
+  const code = e?.code;
+  if (
+    code === 'ECONNRESET' ||
+    code === 'ETIMEDOUT' ||
+    code === 'ECONNREFUSED' ||
+    code === 'EPIPE' ||
+    code === 'EAI_AGAIN'
+  ) {
+    return true;
+  }
+  return e?.name === 'APIConnectionError' || e?.name === 'APIConnectionTimeoutError';
+}
+
+/**
+ * Retry a network-bound LLM call with exponential backoff + jitter. Only
+ * retries transient failures (rate limits, 5xx, dropped connections); auth /
+ * config / parse errors propagate immediately.
+ */
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt === maxAttempts || !isRetryableError(err)) throw err;
+      const backoff = Math.min(8000, 500 * 2 ** (attempt - 1));
+      const jitter = Math.floor(Math.random() * 400);
+      await new Promise((r) => setTimeout(r, backoff + jitter));
+    }
+  }
+  throw lastErr;
+}
+
 async function complete(args: CompleteArgs): Promise<string> {
+  return withRetry(() => completeOnce(args));
+}
+
+async function completeOnce(args: CompleteArgs): Promise<string> {
   const provider = getActiveProvider();
   const key = await getProviderKey(provider);
   if (!key) throw new LlmNotConfiguredError(provider);
@@ -330,55 +376,59 @@ ${transcript}
 
 Return the JSON now.`;
 
-  let raw = '';
-
-  if (provider === 'openai') {
-    const r = await new OpenAI({ apiKey: key }).chat.completions.create({
-      model,
-      temperature: 0.1,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: STRUCTURED_SYSTEM },
-        { role: 'user', content: userMessage }
-      ]
-    });
-    raw = r.choices[0]?.message?.content ?? '';
-  } else if (provider === 'anthropic') {
-    const r = await new Anthropic({ apiKey: key }).messages.create({
-      model,
-      max_tokens: 4096,
-      temperature: 0.1,
-      system: STRUCTURED_SYSTEM + '\n\nReply with ONLY a single JSON object — no prose.',
-      messages: [{ role: 'user', content: userMessage }]
-    });
-    raw = r.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('');
-  } else if (provider === 'gemini') {
-    const m = new GoogleGenerativeAI(key).getGenerativeModel({
-      model,
-      systemInstruction: STRUCTURED_SYSTEM,
-      generationConfig: {
+  let raw = await withRetry(async (): Promise<string> => {
+    if (provider === 'openai') {
+      const r = await new OpenAI({ apiKey: key }).chat.completions.create({
+        model,
         temperature: 0.1,
-        responseMimeType: 'application/json',
-        maxOutputTokens: 4096
-      }
-    });
-    const r = await m.generateContent(userMessage);
-    raw = r.response.text();
-  } else if (provider === 'groq') {
-    const r = await new Groq({ apiKey: key }).chat.completions.create({
-      model,
-      temperature: 0.1,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: STRUCTURED_SYSTEM },
-        { role: 'user', content: userMessage }
-      ]
-    });
-    raw = r.choices[0]?.message?.content ?? '';
-  }
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: STRUCTURED_SYSTEM },
+          { role: 'user', content: userMessage }
+        ]
+      });
+      return r.choices[0]?.message?.content ?? '';
+    }
+    if (provider === 'anthropic') {
+      const r = await new Anthropic({ apiKey: key }).messages.create({
+        model,
+        max_tokens: 4096,
+        temperature: 0.1,
+        system: STRUCTURED_SYSTEM + '\n\nReply with ONLY a single JSON object — no prose.',
+        messages: [{ role: 'user', content: userMessage }]
+      });
+      return r.content
+        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+        .map((b) => b.text)
+        .join('');
+    }
+    if (provider === 'gemini') {
+      const m = new GoogleGenerativeAI(key).getGenerativeModel({
+        model,
+        systemInstruction: STRUCTURED_SYSTEM,
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: 'application/json',
+          maxOutputTokens: 4096
+        }
+      });
+      const r = await m.generateContent(userMessage);
+      return r.response.text();
+    }
+    if (provider === 'groq') {
+      const r = await new Groq({ apiKey: key }).chat.completions.create({
+        model,
+        temperature: 0.1,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: STRUCTURED_SYSTEM },
+          { role: 'user', content: userMessage }
+        ]
+      });
+      return r.choices[0]?.message?.content ?? '';
+    }
+    return '';
+  });
 
   // Strip code fences if a model snuck them in despite the prompt.
   raw = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '');
@@ -440,10 +490,12 @@ export async function embedBatch(
   const key = await getProviderKey('openai');
   if (!key) throw new LlmNotConfiguredError('openai');
   const client = new OpenAI({ apiKey: key });
-  const r = await client.embeddings.create({
-    model: EMBED_MODEL_MAP[provider].model,
-    input: texts
-  });
+  const r = await withRetry(() =>
+    client.embeddings.create({
+      model: EMBED_MODEL_MAP[provider].model,
+      input: texts
+    })
+  );
   return r.data.map((d) => d.embedding);
 }
 

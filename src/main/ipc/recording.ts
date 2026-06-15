@@ -132,15 +132,21 @@ export function registerRecordingIpc(): void {
     if (opts.runFinalPass) {
       try {
         const segs = await transcribeWav({ wavPath: result.audioPath, offsetMs: 0 });
-        transcriptRepo.deleteForMeeting(result.meetingId);
-        for (const s of segs) {
-          transcriptRepo.insert({
-            meetingId: result.meetingId,
-            startMs: s.startMs,
-            endMs: s.endMs,
-            text: s.text,
-            source: 'mixed'
-          });
+        // Only replace the live transcript when the final pass actually produced
+        // output. transcribeWav() can resolve to [] (silent/low-speech audio, or
+        // a Groq response with no segments) WITHOUT throwing — wiping on empty
+        // would permanently destroy the live-captured transcript.
+        if (segs.length > 0) {
+          transcriptRepo.deleteForMeeting(result.meetingId);
+          for (const s of segs) {
+            transcriptRepo.insert({
+              meetingId: result.meetingId,
+              startMs: s.startMs,
+              endMs: s.endMs,
+              text: s.text,
+              source: 'mixed'
+            });
+          }
         }
         meetingsRepo.update(result.meetingId, { status: 'done' });
         broadcast('transcript:final', { meetingId: result.meetingId, segments: segs.length });

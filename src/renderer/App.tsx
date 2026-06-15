@@ -34,6 +34,7 @@ export default function App() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [appVersion, setAppVersion] = useState<string>('');
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [vw, setVw] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1320));
 
   useEffect(() => {
     void hydrate();
@@ -144,6 +145,21 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [sidebarMode, setSidebarMode]);
 
+  // Track viewport width so the sidebar %/px round-trip stays consistent
+  // across window resizes (rAF-coalesced to avoid resize-storm re-renders).
+  useEffect(() => {
+    let raf = 0;
+    const onResize = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => setVw(window.innerWidth));
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
   // Home + Email = full-window, no meeting sidebar
   if (view === 'home') {
     return (
@@ -216,9 +232,8 @@ export default function App() {
     );
   }
 
-  // Sidebar pixel width as percentage relative to viewport so the panel API
-  // can use sizes in %. Recompute on every render — cheap.
-  const vw = typeof window !== 'undefined' ? window.innerWidth : 1320;
+  // Sidebar pixel width as percentage relative to the (resize-tracked) viewport
+  // width so the panel API can use sizes in %.
   const sidebarPct =
     sidebarMode === 'rail' ? (56 / vw) * 100 : Math.max(15, Math.min(40, (sidebarPx / vw) * 100));
 

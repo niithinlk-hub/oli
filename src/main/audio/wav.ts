@@ -16,6 +16,7 @@ export interface WavWriterOptions {
 export class WavWriter {
   private fh: FileHandle | null = null;
   private bytesWritten = 0;
+  private writeChain: Promise<void> = Promise.resolve();
   constructor(private opts: WavWriterOptions) {}
 
   async open(): Promise<void> {
@@ -24,7 +25,21 @@ export class WavWriter {
     await this.fh.write(header, 0, HEADER_SIZE, 0);
   }
 
-  async appendFloat32(samples: Float32Array): Promise<void> {
+  /**
+   * Append samples. Writes are serialized through writeChain so the offset
+   * read and the bytesWritten increment are atomic per write. The getDisplayMedia
+   * fallback path fires recording:chunk without awaiting, so two appends can
+   * otherwise interleave — both reading the same offset and clobbering each
+   * other, corrupting the WAV.
+   */
+  appendFloat32(samples: Float32Array): Promise<void> {
+    const next = this.writeChain.then(() => this.doAppend(samples));
+    // Swallow on the stored chain so one failed write doesn't poison the rest.
+    this.writeChain = next.catch(() => {});
+    return next;
+  }
+
+  private async doAppend(samples: Float32Array): Promise<void> {
     if (!this.fh) throw new Error('WavWriter not opened');
     const buf = Buffer.alloc(samples.length * 2);
     for (let i = 0; i < samples.length; i++) {
@@ -37,6 +52,8 @@ export class WavWriter {
 
   async close(): Promise<{ durationMs: number; totalSamples: number }> {
     if (!this.fh) throw new Error('WavWriter not opened');
+    // Drain any in-flight appends before patching the header with final sizes.
+    await this.writeChain;
     const { sampleRate, channels, bitsPerSample } = this.opts;
     const byteRate = sampleRate * channels * (bitsPerSample / 8);
     const blockAlign = channels * (bitsPerSample / 8);

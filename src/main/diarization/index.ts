@@ -63,23 +63,49 @@ interface AaiSegment {
   text: string;
 }
 
-async function uploadAudio(apiKey: string, wavPath: string): Promise<string> {
+const POLL_INTERVAL_MS = 2500;
+const POLL_DEADLINE_MS = 20 * 60_000; // hard cap on a single diarization job
+const UPLOAD_TIMEOUT_MS = 120_000; // audio files can be large
+const REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * Derive a request signal that aborts on EITHER the caller's signal OR a
+ * per-request timeout (without this a hung TCP connection blocks forever).
+ * AbortSignal.timeout self-clears its timer when the signal is GC'd or fires,
+ * so there is no leaked timer on the success path.
+ */
+function reqSignal(signal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
+
+async function uploadAudio(
+  apiKey: string,
+  wavPath: string,
+  signal?: AbortSignal
+): Promise<string> {
   const data = await readFile(wavPath);
   const r = await fetch('https://api.assemblyai.com/v2/upload', {
     method: 'POST',
     headers: { authorization: apiKey, 'content-type': 'application/octet-stream' },
-    body: new Uint8Array(data)
+    body: new Uint8Array(data),
+    signal: reqSignal(signal, UPLOAD_TIMEOUT_MS)
   });
   if (!r.ok) throw new Error(`AAI upload ${r.status}: ${await r.text()}`);
   const j = (await r.json()) as { upload_url: string };
   return j.upload_url;
 }
 
-async function requestTranscript(apiKey: string, audioUrl: string): Promise<string> {
+async function requestTranscript(
+  apiKey: string,
+  audioUrl: string,
+  signal?: AbortSignal
+): Promise<string> {
   const r = await fetch('https://api.assemblyai.com/v2/transcript', {
     method: 'POST',
     headers: { authorization: apiKey, 'content-type': 'application/json' },
-    body: JSON.stringify({ audio_url: audioUrl, speaker_labels: true })
+    body: JSON.stringify({ audio_url: audioUrl, speaker_labels: true }),
+    signal: reqSignal(signal, REQUEST_TIMEOUT_MS)
   });
   if (!r.ok) throw new Error(`AAI transcript ${r.status}: ${await r.text()}`);
   const j = (await r.json()) as { id: string };
@@ -88,9 +114,14 @@ async function requestTranscript(apiKey: string, audioUrl: string): Promise<stri
 
 async function pollUntilDone(apiKey: string, id: string, signal?: AbortSignal): Promise<AaiSegment[]> {
   const url = `https://api.assemblyai.com/v2/transcript/${id}`;
+  const deadline = Date.now() + POLL_DEADLINE_MS;
   for (;;) {
     if (signal?.aborted) throw new Error('aborted');
-    const r = await fetch(url, { headers: { authorization: apiKey } });
+    if (Date.now() > deadline) throw new Error('diarization timed out after 20 minutes');
+    const r = await fetch(url, {
+      headers: { authorization: apiKey },
+      signal: reqSignal(signal, REQUEST_TIMEOUT_MS)
+    });
     if (!r.ok) throw new Error(`AAI poll ${r.status}`);
     const j = (await r.json()) as {
       status: string;
@@ -99,7 +130,7 @@ async function pollUntilDone(apiKey: string, id: string, signal?: AbortSignal): 
     };
     if (j.status === 'completed') return j.utterances ?? [];
     if (j.status === 'error') throw new Error(j.error ?? 'AAI transcript failed');
-    await new Promise((res) => setTimeout(res, 2500));
+    await new Promise((res) => setTimeout(res, POLL_INTERVAL_MS));
   }
 }
 
@@ -119,8 +150,8 @@ export async function diarizeMeeting(
       'AssemblyAI key not set. Add it in Settings → Diarization.'
     );
   }
-  const audioUrl = await uploadAudio(apiKey, meeting.audioPath);
-  const id = await requestTranscript(apiKey, audioUrl);
+  const audioUrl = await uploadAudio(apiKey, meeting.audioPath, signal);
+  const id = await requestTranscript(apiKey, audioUrl, signal);
   const utterances = await pollUntilDone(apiKey, id, signal);
   if (utterances.length === 0) return { ok: true, speakers: 0 };
   applySpeakers(meetingId, utterances);

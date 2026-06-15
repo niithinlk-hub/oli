@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { renderMarkdown } from '../utils/markdown';
 
 interface Msg {
@@ -15,14 +15,25 @@ export function AskOliChat({ meetingId }: Props) {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pinnedRef = useRef(true);
 
   useEffect(() => {
     setMessages([]);
+    pinnedRef.current = true;
   }, [meetingId]);
 
+  // Only auto-scroll when the user is pinned to the bottom, so a new answer
+  // doesn't yank the view while they're reading earlier messages.
   useEffect(() => {
+    if (!pinnedRef.current) return;
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages.length, busy]);
+
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
 
   const send = async () => {
     const q = input.trim();
@@ -48,8 +59,8 @@ export function AskOliChat({ meetingId }: Props) {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+    <div className="flex-1 min-h-0 flex flex-col">
+      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
         {messages.length === 0 && (
           <div className="text-center pt-6 pb-2">
             <p className="text-body-sm text-ink-muted">
@@ -61,28 +72,7 @@ export function AskOliChat({ meetingId }: Props) {
           </div>
         )}
         {messages.map((m, i) => (
-          <div
-            key={i}
-            className={`max-w-[85%] rounded-card px-4 py-3 ${
-              m.role === 'user'
-                ? 'ml-auto text-white'
-                : 'mr-auto bg-surface-cloud border border-line'
-            }`}
-            style={
-              m.role === 'user'
-                ? { background: 'var(--oli-gradient-primary)' }
-                : undefined
-            }
-          >
-            {m.role === 'user' ? (
-              <p className="text-body-sm whitespace-pre-wrap">{m.content}</p>
-            ) : (
-              <div
-                className="oli-md"
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }}
-              />
-            )}
-          </div>
+          <MessageBubble key={i} role={m.role} content={m.content} />
         ))}
         {busy && (
           <div className="mr-auto bg-surface-cloud border border-line rounded-card px-4 py-3 max-w-[85%]">
@@ -119,6 +109,29 @@ export function AskOliChat({ meetingId }: Props) {
     </div>
   );
 }
+
+const MessageBubble = memo(function MessageBubble({ role, content }: Msg) {
+  // Parse + sanitize markdown once per message, not on every chat re-render.
+  const html = useMemo(
+    () => (role === 'assistant' ? renderMarkdown(content) : ''),
+    [role, content]
+  );
+  if (role === 'user') {
+    return (
+      <div
+        className="max-w-[85%] rounded-card px-4 py-3 ml-auto text-white"
+        style={{ background: 'var(--oli-gradient-primary)' }}
+      >
+        <p className="text-body-sm whitespace-pre-wrap">{content}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="max-w-[85%] rounded-card px-4 py-3 mr-auto bg-surface-cloud border border-line">
+      <div className="oli-md" dangerouslySetInnerHTML={{ __html: html }} />
+    </div>
+  );
+});
 
 function Dot({ delay }: { delay: string }) {
   return (

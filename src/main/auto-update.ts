@@ -1,7 +1,18 @@
-import { app, dialog, type BrowserWindow } from 'electron';
+import { app, dialog, BrowserWindow } from 'electron';
 import { autoUpdater } from 'electron-updater';
 
 let mainWin: BrowserWindow | null = null;
+
+/** Re-point the toast target when the window is recreated (e.g. via tray). */
+export function setAutoUpdateWindow(win: BrowserWindow): void {
+  mainWin = win;
+}
+
+/** A live, non-destroyed window to send update toasts to (or null). */
+function liveWin(): BrowserWindow | null {
+  if (mainWin && !mainWin.isDestroyed()) return mainWin;
+  return BrowserWindow.getAllWindows().find((w) => !w.isDestroyed()) ?? null;
+}
 
 export function initAutoUpdate(win: BrowserWindow): void {
   mainWin = win;
@@ -16,11 +27,12 @@ export function initAutoUpdate(win: BrowserWindow): void {
     console.error('auto-update error:', err);
   });
   autoUpdater.on('update-available', (info) => {
-    mainWin?.webContents.send('app:update-available', { version: info.version });
+    liveWin()?.webContents.send('app:update-available', { version: info.version });
   });
   autoUpdater.on('update-downloaded', async (info) => {
-    mainWin?.webContents.send('app:update-downloaded', { version: info.version });
-    const parent = mainWin && !mainWin.isDestroyed() ? mainWin : undefined;
+    const win = liveWin();
+    win?.webContents.send('app:update-downloaded', { version: info.version });
+    const parent = win ?? undefined;
     const opts = {
       type: 'info' as const,
       title: 'Update ready',

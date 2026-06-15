@@ -72,12 +72,7 @@ export async function startCapture(callbacks: CaptureCallbacks): Promise<Capture
         'Selected source has no audio. Pick a window/screen with "Share audio" enabled.'
       );
     }
-  } catch (err) {
-    callbacks.onError(err as Error);
-    throw err;
-  }
 
-  try {
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: false,
@@ -85,43 +80,49 @@ export async function startCapture(callbacks: CaptureCallbacks): Promise<Capture
         autoGainControl: false
       }
     });
+
+    await installMixerWorklet(ctx);
+
+    const sysSource = ctx.createMediaStreamSource(new MediaStream(displayStream.getAudioTracks()));
+    const micSource = ctx.createMediaStreamSource(micStream);
+
+    const node = new AudioWorkletNode(ctx, 'floyd-mixer', {
+      numberOfInputs: 2,
+      numberOfOutputs: 0
+    });
+
+    sysSource.connect(node, 0, 0);
+    micSource.connect(node, 0, 1);
+
+    const drainPending = handleWorkletChunks(node, callbacks);
+
+    return {
+      stop: async () => {
+        try {
+          node.disconnect();
+          sysSource.disconnect();
+          micSource.disconnect();
+          displayStream?.getTracks().forEach((t) => t.stop());
+          micStream?.getTracks().forEach((t) => t.stop());
+          const pending = drainPending();
+          if (pending.length > 0) callbacks.onChunk(pending);
+          await ctx.close();
+        } catch (err) {
+          callbacks.onError(err as Error);
+        }
+      }
+    };
   } catch (err) {
+    // Any failure before the handle is returned (denied/cancelled permission,
+    // no-audio source, worklet install): tear down streams + close the
+    // AudioContext. Chromium caps ~6 concurrent contexts, so a leak here
+    // bricks recording until the window is reloaded.
     displayStream?.getTracks().forEach((t) => t.stop());
+    micStream?.getTracks().forEach((t) => t.stop());
+    await ctx.close().catch(() => {});
     callbacks.onError(err as Error);
     throw err;
   }
-
-  await installMixerWorklet(ctx);
-
-  const sysSource = ctx.createMediaStreamSource(new MediaStream(displayStream.getAudioTracks()));
-  const micSource = ctx.createMediaStreamSource(micStream);
-
-  const node = new AudioWorkletNode(ctx, 'floyd-mixer', {
-    numberOfInputs: 2,
-    numberOfOutputs: 0
-  });
-
-  sysSource.connect(node, 0, 0);
-  micSource.connect(node, 0, 1);
-
-  const drainPending = handleWorkletChunks(node, callbacks);
-
-  return {
-    stop: async () => {
-      try {
-        node.disconnect();
-        sysSource.disconnect();
-        micSource.disconnect();
-        displayStream?.getTracks().forEach((t) => t.stop());
-        micStream?.getTracks().forEach((t) => t.stop());
-        const pending = drainPending();
-        if (pending.length > 0) callbacks.onChunk(pending);
-        await ctx.close();
-      } catch (err) {
-        callbacks.onError(err as Error);
-      }
-    }
-  };
 }
 
 /**
@@ -140,34 +141,36 @@ export async function startMicCapture(callbacks: CaptureCallbacks): Promise<Capt
         autoGainControl: false
       }
     });
+
+    await installMixerWorklet(ctx);
+
+    const micSource = ctx.createMediaStreamSource(micStream);
+    const node = new AudioWorkletNode(ctx, 'floyd-mixer', {
+      numberOfInputs: 1,
+      numberOfOutputs: 0
+    });
+
+    micSource.connect(node, 0, 0);
+    const drainPending = handleWorkletChunks(node, callbacks);
+
+    return {
+      stop: async () => {
+        try {
+          node.disconnect();
+          micSource.disconnect();
+          micStream?.getTracks().forEach((t) => t.stop());
+          const pending = drainPending();
+          if (pending.length > 0) callbacks.onChunk(pending);
+          await ctx.close();
+        } catch (err) {
+          callbacks.onError(err as Error);
+        }
+      }
+    };
   } catch (err) {
+    micStream?.getTracks().forEach((t) => t.stop());
+    await ctx.close().catch(() => {});
     callbacks.onError(err as Error);
     throw err;
   }
-
-  await installMixerWorklet(ctx);
-
-  const micSource = ctx.createMediaStreamSource(micStream);
-  const node = new AudioWorkletNode(ctx, 'floyd-mixer', {
-    numberOfInputs: 1,
-    numberOfOutputs: 0
-  });
-
-  micSource.connect(node, 0, 0);
-  const drainPending = handleWorkletChunks(node, callbacks);
-
-  return {
-    stop: async () => {
-      try {
-        node.disconnect();
-        micSource.disconnect();
-        micStream?.getTracks().forEach((t) => t.stop());
-        const pending = drainPending();
-        if (pending.length > 0) callbacks.onChunk(pending);
-        await ctx.close();
-      } catch (err) {
-        callbacks.onError(err as Error);
-      }
-    }
-  };
 }
