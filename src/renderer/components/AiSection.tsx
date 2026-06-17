@@ -22,7 +22,12 @@ export function AiSection() {
       window.floyd.ai.diar.status(),
       window.floyd.ai.embed.status()
     ]);
-    setDiarProvider(d.provider);
+    if (d.provider === 'local-pyannote') {
+      await window.floyd.ai.diar.setProvider('cloud-assemblyai');
+      setDiarProvider('cloud-assemblyai');
+    } else {
+      setDiarProvider(d.provider);
+    }
     setDiarKeyConfigured(d.keyConfigured);
     setEmbedProvider(e.provider);
   };
@@ -84,19 +89,13 @@ export function AiSection() {
           </p>
         </button>
         <button
-          onClick={async () => {
-            await window.floyd.ai.diar.setProvider('local-pyannote');
-            await refresh();
-          }}
-          className={`text-left px-3 py-2 rounded-md border ${
-            diarProvider === 'local-pyannote'
-              ? 'border-oli-blue bg-oli-blue/5'
-              : 'border-line bg-white hover:bg-surface-cloud'
-          }`}
+          disabled
+          title="Local pyannote requires a Python sidecar and pyannote.audio install — coming in a later release."
+          className="text-left px-3 py-2 rounded-md border border-line bg-surface-cloud opacity-60 cursor-not-allowed"
         >
           <p className="text-body-sm font-medium">Local pyannote</p>
           <p className="text-caption text-ink-muted mt-0.5">
-            Coming Phase 4. Currently throws not-implemented.
+            Not available yet — needs Python + pyannote.audio sidecar.
           </p>
         </button>
       </div>

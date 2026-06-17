@@ -118,11 +118,11 @@ export function Settings({ onClose }: { onClose: () => void }) {
   };
 
   if (!settings) {
-    return <div className="flex-1 flex items-center justify-center text-ink-muted">Loading…</div>;
+    return <div className="h-full flex items-center justify-center text-ink-muted">Loading…</div>;
   }
 
   return (
-    <section className="flex-1 flex flex-col">
+    <section className="h-full flex flex-col">
       <header className="titlebar-drag h-14 flex items-center justify-between px-6 border-b border-line bg-white">
         <div className="flex items-center gap-3">
           <OliLogoHorizontal iconSize={24} wordmarkSize={20} />

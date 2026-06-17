@@ -63,10 +63,20 @@ try {
 
 export async function isOutlookInstalled(): Promise<boolean> {
   if (process.platform !== 'win32') return false;
+  // Probe the COM ProgID registration (HKCR\Outlook.Application). Present iff
+  // a desktop Outlook install registered its COM server. Survives Office
+  // version variance (we don't care if it's 15.0/16.0/365).
   return new Promise((resolve) => {
     execFile(
       'powershell',
-      ['-NoProfile', '-Command', "Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Office\\Outlook' -or Test-Path 'HKCU:\\SOFTWARE\\Microsoft\\Office\\Outlook'"],
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        "if (Test-Path 'Registry::HKEY_CLASSES_ROOT\\Outlook.Application') { 'true' } else { 'false' }"
+      ],
       { timeout: 4000, windowsHide: true },
       (err, stdout) => {
         if (err) {

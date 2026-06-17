@@ -11,7 +11,7 @@ interface Props {
   onClose: () => void;
 }
 
-const ONBOARDED_KEY = 'oli.onboarded';
+const ONBOARDED_KEY = 'oli.onboarded.v1.4';
 
 export function Onboarding({ onClose }: Props) {
   const [step, setStep] = useState<Step>('welcome');
@@ -36,13 +36,13 @@ export function Onboarding({ onClose }: Props) {
       style={{ background: 'rgba(7, 26, 51, 0.6)', backdropFilter: 'blur(6px)' }}
     >
       <div
-        className="rounded-card bg-white shadow-floating w-[640px] max-w-[92vw] overflow-hidden"
+        className="rounded-card bg-white shadow-floating w-[640px] max-w-[92vw] max-h-[90vh] overflow-hidden flex"
         style={{ boxShadow: 'var(--oli-shadow-floating)' }}
       >
-        <div className="flex">
+        <div className="flex w-full min-h-0">
           <Sidebar step={step} />
-          <div className="flex-1 p-8 min-h-[460px] flex flex-col">
-            <div className="flex-1 overflow-y-auto pr-1">
+          <div className="flex-1 p-8 min-h-[460px] flex flex-col min-w-0">
+            <div className="flex-1 overflow-y-auto pr-1 min-h-0">
               {step === 'welcome' && <Welcome onQuickStart={() => setStep('mic')} />}
               {step === 'mic' && <MicStep />}
               {step === 'ai' && <AiProviderStep />}

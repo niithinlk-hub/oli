@@ -1,6 +1,6 @@
 {
   "name": "oli",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Oli — local-first AI meeting memory for Windows.",
   "main": "out/main/index.js",
   "author": "hussa",
