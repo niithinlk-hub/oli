@@ -32,26 +32,24 @@ export function Onboarding({ onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(7, 26, 51, 0.6)', backdropFilter: 'blur(6px)' }}
     >
       <div
-        className="rounded-card bg-white shadow-floating w-[640px] max-w-[92vw] max-h-[90vh] overflow-hidden flex"
+        className="rounded-card bg-white shadow-floating w-[640px] max-w-[92vw] max-h-[90vh] flex overflow-hidden"
         style={{ boxShadow: 'var(--oli-shadow-floating)' }}
       >
-        <div className="flex w-full min-h-0">
-          <Sidebar step={step} />
-          <div className="flex-1 p-8 min-h-[460px] flex flex-col min-w-0">
-            <div className="flex-1 overflow-y-auto pr-1 min-h-0">
-              {step === 'welcome' && <Welcome onQuickStart={() => setStep('mic')} />}
-              {step === 'mic' && <MicStep />}
-              {step === 'ai' && <AiProviderStep />}
-              {step === 'stt' && <SttStep />}
-              {step === 'calendar' && <CalendarStep />}
-              {step === 'done' && <DoneStep />}
-            </div>
-            <Footer step={step} onBack={back} onNext={next} onSkip={finish} />
+        <Sidebar step={step} />
+        <div className="flex-1 min-w-0 min-h-0 p-8 flex flex-col">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+            {step === 'welcome' && <Welcome onQuickStart={() => setStep('mic')} />}
+            {step === 'mic' && <MicStep />}
+            {step === 'ai' && <AiProviderStep />}
+            {step === 'stt' && <SttStep />}
+            {step === 'calendar' && <CalendarStep />}
+            {step === 'done' && <DoneStep />}
           </div>
+          <Footer step={step} onBack={back} onNext={next} onSkip={finish} />
         </div>
       </div>
     </div>
@@ -65,7 +63,7 @@ export function shouldShowOnboarding(): boolean {
 function Sidebar({ step }: { step: Step }) {
   return (
     <aside
-      className="w-44 p-6 text-white"
+      className="w-44 shrink-0 p-6 text-white overflow-y-auto"
       style={{ background: 'var(--oli-gradient-memory)' }}
     >
       <OliIcon size={36} />
