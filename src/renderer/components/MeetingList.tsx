@@ -35,7 +35,13 @@ export function MeetingList({
   onOpenAsk,
   upcomingSlot
 }: Props) {
-  const { meetings, selectedId, refresh, select, createMeeting } = useMeetingsStore();
+  // Per-field selectors so the sidebar doesn't re-render on every unrelated
+  // store mutation (e.g. the loading-flag toggle each refresh() does twice).
+  const meetings = useMeetingsStore((s) => s.meetings);
+  const selectedId = useMeetingsStore((s) => s.selectedId);
+  const refresh = useMeetingsStore((s) => s.refresh);
+  const select = useMeetingsStore((s) => s.select);
+  const createMeeting = useMeetingsStore((s) => s.createMeeting);
   const sidebarMode = useUiPrefs((s) => s.sidebarMode);
   const setSidebarMode = useUiPrefs((s) => s.setSidebarMode);
 

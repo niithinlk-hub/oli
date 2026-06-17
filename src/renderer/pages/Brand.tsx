@@ -7,7 +7,7 @@ type Tab = 'preview' | 'guidelines';
 export function Brand({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<Tab>('preview');
   return (
-    <section className="flex-1 flex flex-col">
+    <section className="h-full flex flex-col">
       <header className="titlebar-drag h-14 flex items-center justify-between px-6 border-b border-line bg-white">
         <div className="flex items-center gap-4">
           <h2 className="text-h4">Brand</h2>

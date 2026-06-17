@@ -34,6 +34,7 @@ export default function App() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [appVersion, setAppVersion] = useState<string>('');
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [vw, setVw] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1320));
 
   useEffect(() => {
     void hydrate();
@@ -76,9 +77,12 @@ export default function App() {
   // means the pipeline is active, regardless of whether mic+loopback are
   // both muted.
   const isRecordingRef = useRef(false);
+  const recordingStartedAtRef = useRef<number | null>(null);
   useEffect(() => {
     const unsub = useMeetingsStore.subscribe((s) => {
-      isRecordingRef.current = s.meetings.some((m) => m.status === 'recording');
+      const rec = s.meetings.find((m) => m.status === 'recording');
+      isRecordingRef.current = !!rec;
+      recordingStartedAtRef.current = rec?.startedAt ?? null;
     });
     return () => unsub();
   }, []);
@@ -86,6 +90,18 @@ export default function App() {
   useEffect(() => {
     const off = window.floyd.mini.onRequestOpenOnHide(() => {
       void window.floyd.mini.openIfRecording(isRecordingRef.current);
+    });
+    return () => {
+      off();
+    };
+  }, []);
+
+  // Track mini-recorder open state so we only forward amplitude over IPC while
+  // the mini window (its only consumer) is actually open.
+  const isMiniOpenRef = useRef(false);
+  useEffect(() => {
+    const off = window.floyd.mini.onOpenChanged((open) => {
+      isMiniOpenRef.current = open;
     });
     return () => {
       off();
@@ -112,12 +128,18 @@ export default function App() {
   useEffect(() => {
     let lastSent = 0;
     const unsub = useAmplitude.subscribe((s) => {
+      if (!isMiniOpenRef.current) return; // mini closed → nobody listening, skip IPC
       const now = Date.now();
       // Throttle to ~30fps to avoid IPC flooding.
       if (now - lastSent < 33) return;
       lastSent = now;
       const bars = s.micBars.map((m, i) => Math.max(m, s.loopbackBars[i] ?? 0));
-      window.floyd.mini.sendAmplitude({ mic: s.micRms, loopback: s.loopbackRms, bars });
+      window.floyd.mini.sendAmplitude({
+        mic: s.micRms,
+        loopback: s.loopbackRms,
+        bars,
+        startedAt: recordingStartedAtRef.current ?? undefined
+      });
     });
     return () => unsub();
   }, []);
@@ -143,6 +165,21 @@ export default function App() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [sidebarMode, setSidebarMode]);
+
+  // Track viewport width so the sidebar %/px round-trip stays consistent
+  // across window resizes (rAF-coalesced to avoid resize-storm re-renders).
+  useEffect(() => {
+    let raf = 0;
+    const onResize = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => setVw(window.innerWidth));
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
 
   // Home + Email = full-window, no meeting sidebar
   if (view === 'home') {
@@ -216,9 +253,8 @@ export default function App() {
     );
   }
 
-  // Sidebar pixel width as percentage relative to viewport so the panel API
-  // can use sizes in %. Recompute on every render — cheap.
-  const vw = typeof window !== 'undefined' ? window.innerWidth : 1320;
+  // Sidebar pixel width as percentage relative to the (resize-tracked) viewport
+  // width so the panel API can use sizes in %.
   const sidebarPct =
     sidebarMode === 'rail' ? (56 / vw) * 100 : Math.max(15, Math.min(40, (sidebarPx / vw) * 100));
 

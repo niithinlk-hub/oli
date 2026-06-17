@@ -127,8 +127,11 @@ export function registerAiIpc(): void {
     askRepo.listMessages(conversationId)
   );
   ipcMain.handle('ask:send', async (_e, conversationId: string, question: string) => {
+    const q = (question ?? '').trim();
+    if (!q) return { ok: false, message: 'Ask a question first.' };
+    if (q.length > 8_000) return { ok: false, message: 'Question too long (8k character max).' };
     try {
-      const r = await askMeetings(conversationId, question);
+      const r = await askMeetings(conversationId, q);
       return { ok: true, message: r.message };
     } catch (err) {
       return { ok: false, message: (err as Error).message };

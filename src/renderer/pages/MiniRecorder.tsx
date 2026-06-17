@@ -10,17 +10,23 @@ import { useEffect, useState } from 'react';
 export function MiniRecorder() {
   const [bars, setBars] = useState<number[]>(Array(36).fill(0));
   const [elapsed, setElapsed] = useState(0);
-  const [startedAt] = useState(Date.now());
+  const [startedAt, setStartedAt] = useState<number | null>(null);
 
   useEffect(() => {
-    const off = window.floyd.mini.onAmplitude((p) => setBars(p.bars));
+    const off = window.floyd.mini.onAmplitude((p) => {
+      setBars(p.bars);
+      // Seed the clock from the real recording start (sent by main), not this
+      // window's mount time — the mini opens mid-recording.
+      if (p.startedAt) setStartedAt((prev) => prev ?? p.startedAt ?? null);
+    });
     return () => {
       off();
     };
   }, []);
 
   useEffect(() => {
-    const t = setInterval(() => setElapsed(Date.now() - startedAt), 250);
+    const base = startedAt ?? Date.now();
+    const t = setInterval(() => setElapsed(Date.now() - base), 250);
     return () => clearInterval(t);
   }, [startedAt]);
 

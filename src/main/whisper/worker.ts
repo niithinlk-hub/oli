@@ -59,6 +59,8 @@ export interface WhisperRunOptions {
   /** Override binary/model path; otherwise pulled from settings. */
   binaryPath?: string;
   modelPath?: string;
+  /** Abort the in-flight run — kills the spawned whisper-cli child. */
+  signal?: AbortSignal;
 }
 
 export class WhisperNotConfiguredError extends Error {
@@ -98,11 +100,24 @@ export async function transcribeFile(opts: WhisperRunOptions): Promise<WhisperSe
   ];
 
   await new Promise<void>((resolve, reject) => {
+    if (opts.signal?.aborted) {
+      reject(new Error('aborted'));
+      return;
+    }
     const child = spawn(binary, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const onAbort = () => {
+      child.kill();
+      reject(new Error('aborted'));
+    };
+    opts.signal?.addEventListener('abort', onAbort, { once: true });
     let stderrBuf = '';
     child.stderr.on('data', (c) => (stderrBuf += c.toString()));
-    child.on('error', reject);
+    child.on('error', (err) => {
+      opts.signal?.removeEventListener('abort', onAbort);
+      reject(err);
+    });
     child.on('close', (code) => {
+      opts.signal?.removeEventListener('abort', onAbort);
       if (code === 0) resolve();
       else reject(new Error(`whisper exit ${code}: ${stderrBuf.slice(0, 500)}`));
     });

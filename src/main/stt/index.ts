@@ -93,16 +93,20 @@ export interface TranscribeOpts {
  * Throws SttNotConfiguredError if the provider is unconfigured (no API key,
  * missing whisper binary, etc).
  */
-export async function transcribeWav(opts: TranscribeOpts): Promise<WhisperSegment[]> {
+export async function transcribeWav(
+  opts: TranscribeOpts,
+  signal?: AbortSignal
+): Promise<WhisperSegment[]> {
   const provider = getSttProvider();
   if (provider === 'groq') {
     return groqTranscribe({
       wavPath: opts.wavPath,
       offsetMs: opts.offsetMs ?? 0,
-      model: getGroqModel()
+      model: getGroqModel(),
+      signal
     });
   }
-  return localTranscribe({ wavPath: opts.wavPath, offsetMs: opts.offsetMs });
+  return localTranscribe({ wavPath: opts.wavPath, offsetMs: opts.offsetMs, signal });
 }
 
 export type { WhisperSegment };

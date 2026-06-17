@@ -93,7 +93,7 @@ export function Home({
         </button>
       </header>
 
-      <main className="flex-1 flex flex-col items-center justify-center px-6 overflow-y-auto py-10">
+      <main className="flex-1 min-h-0 overflow-y-auto px-6 py-10 flex flex-col items-center">
         <div className="text-center max-w-3xl">
           <p className="text-caption uppercase tracking-wider text-ink-muted">{todayStr()}</p>
           <h1

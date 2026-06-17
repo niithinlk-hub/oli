@@ -21,6 +21,8 @@ import { getSecret, setSecret } from '../secrets';
 
 const TOKENS_SECRET = 'extension-tokens';
 const PAIRING_TTL_MS = 5 * 60_000; // 5 min
+const MAX_PAIR_ATTEMPTS = 5; // invalidate the code after this many wrong guesses
+const MAX_REPHRASE_CHARS = 50_000;
 
 interface ExtensionToken {
   id: string;
@@ -31,7 +33,8 @@ interface ExtensionToken {
 
 let server: FastifyInstance | null = null;
 let port = 0;
-let pairingCode: { code: string; expiresAt: number; label: string } | null = null;
+let pairingCode: { code: string; expiresAt: number; label: string; attempts: number } | null =
+  null;
 
 async function loadTokens(): Promise<ExtensionToken[]> {
   const raw = await getSecret(TOKENS_SECRET);
@@ -60,8 +63,8 @@ export async function revokeExtensionToken(id: string): Promise<void> {
 }
 
 export function generatePairingCode(label: string = 'Extension'): string {
-  const code = randomBytes(3).toString('hex').toUpperCase(); // 6 chars
-  pairingCode = { code, expiresAt: Date.now() + PAIRING_TTL_MS, label };
+  const code = randomBytes(5).toString('hex').toUpperCase(); // 10 chars, 40-bit entropy
+  pairingCode = { code, expiresAt: Date.now() + PAIRING_TTL_MS, label, attempts: 0 };
   return code;
 }
 
@@ -111,10 +114,18 @@ export async function startLocalServer(preferredPort = 7421): Promise<{ port: nu
   server.post('/pair', async (req, reply) => {
     const code = (req.body as { code?: string } | null)?.code;
     if (!code || !pairingCode) return reply.code(400).send({ error: 'no pairing in progress' });
-    if (Date.now() > pairingCode.expiresAt)
+    if (Date.now() > pairingCode.expiresAt) {
+      pairingCode = null;
       return reply.code(410).send({ error: 'pairing code expired' });
-    if (code.toUpperCase() !== pairingCode.code)
+    }
+    if (code.toUpperCase() !== pairingCode.code) {
+      pairingCode.attempts += 1;
+      if (pairingCode.attempts >= MAX_PAIR_ATTEMPTS) {
+        pairingCode = null;
+        return reply.code(429).send({ error: 'too many attempts; pairing code invalidated' });
+      }
       return reply.code(401).send({ error: 'wrong code' });
+    }
 
     const id = randomBytes(8).toString('hex');
     const token = randomBytes(24).toString('base64url');
@@ -131,6 +142,8 @@ export async function startLocalServer(preferredPort = 7421): Promise<{ port: nu
       | { text?: string; tone?: EmailTone; intent?: EmailIntent; contextNote?: string }
       | null;
     if (!body?.text?.trim()) return reply.code(400).send({ error: 'text required' });
+    if (body.text.length > MAX_REPHRASE_CHARS)
+      return reply.code(413).send({ error: 'text too long' });
     try {
       const out = await rephraseEmail({
         originalText: body.text,
@@ -145,19 +158,26 @@ export async function startLocalServer(preferredPort = 7421): Promise<{ port: nu
   });
 
   // Bind only to loopback. Try preferred port; on EADDRINUSE try +1..+5.
-  for (let i = 0; i < 6; i++) {
-    try {
-      const tryPort = preferredPort + i;
-      await server.listen({ port: tryPort, host: '127.0.0.1' });
-      port = tryPort;
-      return { port };
-    } catch (err) {
-      if ((err as { code?: string }).code !== 'EADDRINUSE') throw err;
+  // Any escape from this block must reset module state, else the `if (server)`
+  // guard above would return a poisoned non-listening singleton forever.
+  try {
+    for (let i = 0; i < 6; i++) {
+      try {
+        const tryPort = preferredPort + i;
+        await server.listen({ port: tryPort, host: '127.0.0.1' });
+        port = tryPort;
+        return { port };
+      } catch (err) {
+        if ((err as { code?: string }).code !== 'EADDRINUSE') throw err;
+      }
     }
+    throw new Error(`could not bind localServer on ${preferredPort}-${preferredPort + 5}`);
+  } catch (err) {
+    await server.close().catch(() => {});
+    server = null;
+    port = 0;
+    throw err;
   }
-  await server.close();
-  server = null;
-  throw new Error(`could not bind localServer on ${preferredPort}-${preferredPort + 5}`);
 }
 
 export async function stopLocalServer(): Promise<void> {

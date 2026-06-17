@@ -7,7 +7,8 @@ import {
   desktopCapturer,
   globalShortcut,
   protocol,
-  net
+  net,
+  dialog
 } from 'electron';
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
@@ -29,11 +30,20 @@ import { startCalendarPoller, stopCalendarPoller } from './calendar/poller';
 import { startAutoRecordScheduler, stopAutoRecordScheduler } from './calendar/autoRecord';
 import { stopFolderWatchers } from './calendar/icsFolderWatch';
 import { initTray, destroyTray, setTrayOpenHandler } from './tray';
-import { initAutoUpdate, checkForUpdatesNow } from './auto-update';
+import { initAutoUpdate, checkForUpdatesNow, setAutoUpdateWindow } from './auto-update';
 import { buildAppMenu } from './menu';
 import { buildWindowIcon } from './window-icon';
 
 const isDev = !app.isPackaged;
+
+// Keep the main process alive + logged rather than dying silently on an
+// unhandled async error somewhere in the IPC / capture / calendar layers.
+process.on('unhandledRejection', (reason) => {
+  console.error('unhandledRejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('uncaughtException:', err);
+});
 
 // Custom audio protocol so the renderer can play meeting WAVs without
 // loosening webSecurity. URL form: `oli-audio://{meetingId}`.
@@ -141,6 +151,7 @@ app.whenReady().then(() => {
   setTrayOpenHandler(() => {
     if (BrowserWindow.getAllWindows().length === 0) {
       win = createMainWindow();
+      setAutoUpdateWindow(win);
     }
   });
   startCalendarPoller();
@@ -162,7 +173,13 @@ app.whenReady().then(() => {
     focused.webContents.send('menu:toggle-record');
   });
   if (!registered) console.warn(`globalShortcut.register('${HOTKEY}') failed`);
-});
+})
+  .catch((err) => {
+    // initDb / migrations / window creation threw — surface it instead of
+    // launching to a blank, dead window with no error.
+    dialog.showErrorBox('Oli failed to start', String((err as Error)?.stack ?? err));
+    app.quit();
+  });
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {

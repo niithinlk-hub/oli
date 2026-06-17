@@ -207,9 +207,15 @@ export interface SearchHit {
 
 export async function searchEmbeddings(query: string, k = 8): Promise<SearchHit[]> {
   const provider = getEmbedProvider();
+  const model = embedModelName(provider);
+  const dim = embedDimensions(provider);
   const [qVec] = await embedBatch([query], provider);
   if (!qVec) return [];
   const db = initDb();
+  // Only score vectors that share the active provider's model + dimension.
+  // After a provider switch (e.g. small 1536-d ↔ large 3072-d) the table can
+  // hold mixed dimensions; cosine() would silently compare across latent
+  // spaces and return garbage scores. Degrade to "no hits until reindex".
   const rows = db
     .prepare(
       `SELECT e.id, e.meeting_id, e.segment_id, e.kind, e.content, e.vector_json,
@@ -217,9 +223,10 @@ export async function searchEmbeddings(query: string, k = 8): Promise<SearchHit[
               ts.start_ms AS segment_start_ms
        FROM embeddings e
        JOIN meetings m ON m.id = e.meeting_id
-       LEFT JOIN transcript_segments ts ON ts.id = e.segment_id`
+       LEFT JOIN transcript_segments ts ON ts.id = e.segment_id
+       WHERE e.vector_dim = ? AND e.model = ?`
     )
-    .all() as Array<{
+    .all(dim, model) as Array<{
       id: number;
       meeting_id: string;
       segment_id: number | null;
@@ -237,6 +244,7 @@ export async function searchEmbeddings(query: string, k = 8): Promise<SearchHit[
     } catch {
       continue;
     }
+    if (v.length !== qVec.length) continue; // belt-and-suspenders dim guard
     const score = cosine(qVec, v);
     scored.push({
       meetingId: r.meeting_id,

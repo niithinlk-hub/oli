@@ -56,10 +56,13 @@ function tick(): void {
   const upcoming = calendarEventsRepo.upcoming(now, 90_000);
   for (const ev of upcoming) {
     if (ev.autoRecordOverride === false) continue;
-    if (fired.has(ev.id)) continue;
+    // Subscription syncs DELETE+re-INSERT events with a fresh row id each time,
+    // so dedup on the stable externalId (fall back to id for local events).
+    const dedupKey = ev.externalId || ev.id;
+    if (fired.has(dedupKey)) continue;
     const delta = ev.startsAt - now;
     if (delta < 30_000 || delta > 90_000) continue;
-    fired.set(ev.id, now);
+    fired.set(dedupKey, now);
 
     if (mode === 'auto') {
       broadcast('calendar:auto-record-start', { event: ev });

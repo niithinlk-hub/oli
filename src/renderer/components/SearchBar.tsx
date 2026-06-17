@@ -18,6 +18,7 @@ export function SearchBar({ openSignal }: Props) {
   const [results, setResults] = useState<Result[]>([]);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const latestRef = useRef(0);
   const select = useMeetingsStore((s) => s.select);
 
   useEffect(() => {
@@ -34,7 +35,9 @@ export function SearchBar({ openSignal }: Props) {
     }
     setLoading(true);
     const t = setTimeout(async () => {
+      const reqId = ++latestRef.current;
       const r = await window.floyd.meetings.search(q);
+      if (reqId !== latestRef.current) return; // superseded by a newer keystroke
       setResults(r);
       setLoading(false);
     }, 200);

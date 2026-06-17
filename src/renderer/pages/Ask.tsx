@@ -39,6 +39,7 @@ export function Ask({ onHome, onOpenMeeting }: Props) {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const activeIdRef = useRef<string | null>(null);
   const select = useMeetingsStore((s) => s.select);
 
   const refreshConvs = async () => {
@@ -58,6 +59,7 @@ export function Ask({ onHome, onOpenMeeting }: Props) {
   }, []);
 
   useEffect(() => {
+    activeIdRef.current = activeId;
     if (activeId) void refreshMessages(activeId);
   }, [activeId]);
 
@@ -82,6 +84,7 @@ export function Ask({ onHome, onOpenMeeting }: Props) {
       );
       id = c.id;
       setActiveId(id);
+      activeIdRef.current = id; // keep the in-flight guard consistent
       await refreshConvs();
     }
     const text = draft.trim();
@@ -93,6 +96,12 @@ export function Ask({ onHome, onOpenMeeting }: Props) {
       { id: -Date.now(), role: 'user', content: text, citations: [], createdAt: Date.now() }
     ]);
     await window.floyd.ai.ask.send(id, text);
+    // If the user switched conversations while this was in flight, don't let the
+    // stale response overwrite the now-active conversation's messages.
+    if (id !== activeIdRef.current) {
+      setBusy(false);
+      return;
+    }
     await refreshMessages(id);
     await refreshConvs();
     setBusy(false);
